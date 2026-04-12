@@ -3317,13 +3317,32 @@ window.refreshBlueprintData = async function() {
       resources: bpData.resources || [],
       items: bpData.items || [],
       properties: bpData.properties || {},
-      blueprints: (bpData.blueprints || []).map(bp => ({
+      blueprints: (bpData.blueprints || []).filter(bp => bp && bp.guid).map(bp => ({
         guid: bp.guid,
-        productName: bp.productName,
-        type: bp.type,
+        productName: bp.productName || 'Unknown',
+        type: bp.type || 'unknown',
         subtype: bp.subtype || null,
         isDefault: bp.isDefault || false,
-        tiers: bp.tiers
+        tiers: (bp.tiers || []).map(tier => ({
+          craftTimeSeconds: tier.craftTimeSeconds || 0,
+          slots: (tier.slots || []).map(slot => ({
+            name: slot.name || '',
+            options: (slot.options || []).map(opt => ({
+              type: opt.type || 'resource',
+              quantity: opt.quantity || 0,
+              minQuality: opt.minQuality || 0,
+              resourceName: opt.resourceName || ''
+            })),
+            modifiers: (slot.modifiers || []).map(mod => ({
+              startQuality: mod.startQuality ?? 0,
+              endQuality: mod.endQuality ?? 1000,
+              modifierAtStart: mod.modifierAtStart ?? 1,
+              modifierAtEnd: mod.modifierAtEnd ?? 1,
+              propertyName: mod.propertyName || '',
+              propertyKey: mod.propertyKey || ''
+            }))
+          }))
+        }))
       }))
     };
 
