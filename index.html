@@ -620,14 +620,24 @@ label { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: 
       <div id="evPhase3" style="display:none">
         <div class="card">
           <div class="section-title" style="font-size:9px"><div class="dot" style="background:var(--orange)"></div> Add Material</div>
-          <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr auto;gap:10px;align-items:end">
-            <div class="field" style="margin:0"><label>Material Name</label><input type="text" id="matName" placeholder="Quantanium"></div>
+          <div style="display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:10px;align-items:end">
+            <div class="field" style="margin:0"><label>Name</label><input type="text" id="matName" placeholder="Quantanium, P4-AR Magazine..."></div>
             <div class="field" style="margin:0"><label>Quantity</label><input type="number" id="matQty" placeholder="12" min="0.01" step="0.01"></div>
-            <div class="field" style="margin:0"><label>Quality (1-999)</label><input type="number" id="matQual" placeholder="500" min="1" max="999"></div>
-            <div class="field" style="margin:0"><label>Splittable?</label>
-              <select id="matSplit"><option value="yes">Yes (gems)</option><option value="no">No (whole units)</option></select>
-            </div>
+            <div class="field" style="margin:0"><label>Quality (1-999)</label><input type="number" id="matQual" placeholder="500" min="1" max="999" id="matQual"></div>
             <button class="btn orange" style="height:36px;padding:0 16px;margin-bottom:0" onclick="addMaterial()">+</button>
+          </div>
+          <div style="display:flex;gap:20px;margin-top:10px;align-items:center;flex-wrap:wrap">
+            <div style="font-size:10px;letter-spacing:1px;color:var(--text2);text-transform:uppercase">Type</div>
+            <label style="display:flex;align-items:center;gap:6px;margin:0;font-size:11px;cursor:pointer;text-transform:none;letter-spacing:0">
+              <input type="radio" name="matType" id="matTypeMaterial" value="material" checked onchange="onMatTypeChange('ev')"> Material
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;margin:0;font-size:11px;cursor:pointer;text-transform:none;letter-spacing:0">
+              <input type="radio" name="matType" id="matTypeItem" value="item" onchange="onMatTypeChange('ev')"> Item
+            </label>
+            <div id="matGemWrap" style="display:flex;align-items:center;gap:6px;margin-left:16px">
+              <input type="checkbox" id="matSplitGem" style="width:auto">
+              <label for="matSplitGem" style="margin:0;font-size:11px;text-transform:none;letter-spacing:0;cursor:pointer">Gem (splittable)</label>
+            </div>
           </div>
           <div id="matListEv" style="margin-top:16px"></div>
           <div class="btn-row">
@@ -1575,17 +1585,31 @@ window.parseAttendance = function() {
   document.getElementById('attPreview').style.display = '';
 };
 
+window.onMatTypeChange = function(ctx) {
+  const isItem = document.getElementById(ctx === 'ev' ? 'matTypeItem' : 'matTypeItem').checked;
+  const qualField = document.getElementById('matQual');
+  const gemWrap = document.getElementById('matGemWrap');
+  if (qualField) qualField.style.opacity = isItem ? '0.4' : '1';
+  if (gemWrap) gemWrap.style.display = isItem ? 'none' : 'flex';
+};
+
 window.addMaterial = function() {
   const name = document.getElementById('matName').value.trim();
   const qty = parseFloat(document.getElementById('matQty').value);
-  const qual = parseInt(document.getElementById('matQual').value);
-  const splittable = document.getElementById('matSplit').value === 'yes';
+  const isItem = document.getElementById('matTypeItem')?.checked;
+  const qual = isItem ? 0 : parseInt(document.getElementById('matQual').value);
+  const splittable = isItem ? true : (document.getElementById('matSplitGem')?.checked || false);
+  const itemType = isItem ? 'item' : 'material';
+
   if (!name || isNaN(qty) || qty <= 0) return;
-  if (isNaN(qual) || qual < 1 || qual > 999) { alert('Quality must be between 1 and 999.'); return; }
-  window._evMaterials.push({ name, qty, qual, splittable });
+  if (!isItem && (isNaN(qual) || qual < 1 || qual > 999)) { alert('Quality must be between 1 and 999 for materials.'); return; }
+  window._evMaterials.push({ name, qty, qual, splittable, itemType });
   document.getElementById('matName').value = '';
   document.getElementById('matQty').value = '';
   document.getElementById('matQual').value = '';
+  document.getElementById('matTypeMaterial').checked = true;
+  if (document.getElementById('matSplitGem')) document.getElementById('matSplitGem').checked = false;
+  if (document.getElementById('matGemWrap')) document.getElementById('matGemWrap').style.display = 'flex';
   renderEvMaterials();
 };
 
@@ -1600,8 +1624,8 @@ function renderEvMaterials() {
   el.innerHTML = `<table class="tbl"><thead><tr><th>Material</th><th>Qty</th><th>Quality</th><th>Grade</th><th>Type</th><th></th></tr></thead><tbody>` +
     window._evMaterials.map((m, i) => `<tr>
       <td>${m.name}</td><td>${m.qty}</td>
-      <td>${qualBarHtml(m.qual)}</td>
-      <td>${gradeBadge(m.qual)}</td>
+      <td>${m.itemType === 'item' ? '<span style="color:var(--text3)">—</span>' : qualBarHtml(m.qual)}</td>
+      <td>${m.itemType === 'item' ? '<span style="font-size:10px;color:var(--text2)">Item</span>' : gradeBadge(m.qual)}</td>
       <td><span class="tag" style="${m.splittable ? 'color:var(--green);background:var(--green-dim);border:1px solid rgba(0,232,152,0.2)' : 'color:var(--orange);background:var(--orange-dim);border:1px solid rgba(255,112,32,0.2)'}">${m.splittable ? 'SPLITTABLE' : 'WHOLE UNITS'}</span></td>
       <td><button class="btn red sm" onclick="removeEvMaterial(${i})">×</button></td>
     </tr>`).join('') + '</tbody></table>';
@@ -1705,6 +1729,7 @@ window.publishEvent = async function() {
       totalQty: mat.qty,
       quality: mat.qual || 0,
       splittable: mat.splittable || false,
+      itemType: mat.itemType || 'material',
       allocations,
       sourceEvent: name,
       sourceEventId: eventId,
@@ -1737,13 +1762,22 @@ window.showAddPersonalModal = function() {
         <span id="pm-item-type" style="font-size:10px;color:var(--text2);margin-left:8px"></span></div>
         <button onclick="pmClearItem()" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:14px">×</button>
       </div>
+      <div style="display:flex;gap:16px;margin-top:8px;align-items:center;flex-wrap:wrap">
+        <label style="display:flex;align-items:center;gap:6px;margin:0;font-size:11px;cursor:pointer;text-transform:none;letter-spacing:0">
+          <input type="radio" name="pmType" id="pmTypeMaterial" value="material" checked> Material
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;margin:0;font-size:11px;cursor:pointer;text-transform:none;letter-spacing:0">
+          <input type="radio" name="pmType" id="pmTypeItem" value="item"> Item
+        </label>
+        <div id="pmGemWrap" style="display:flex;align-items:center;gap:6px;margin-left:8px">
+          <input type="checkbox" id="pmSplitGem" style="width:auto">
+          <label for="pmSplitGem" style="margin:0;font-size:11px;text-transform:none;letter-spacing:0;cursor:pointer">Gem (splittable)</label>
+        </div>
+      </div>
     </div>
     <div class="grid2">
       <div class="field"><label>Quantity</label><input type="number" id="pm-qty" placeholder="5" min="0.01" step="0.01"></div>
-      <div class="field"><label>Quality (1-999)</label><input type="number" id="pm-qual" placeholder="500" min="1" max="999"></div>
-    </div>
-    <div class="field"><label>Splittable?</label>
-      <select id="pm-split"><option value="yes">Yes (gems/stackables)</option><option value="no">No (whole units)</option></select>
+      <div class="field"><label>Quality (1-999, optional for items)</label><input type="number" id="pmQual" placeholder="500" min="1" max="999"></div>
     </div>
     <div class="field"><label>Notes (optional)</label><input type="text" id="pm-notes" placeholder="CRU-L1 run..."></div>
     <div class="btn-row"><button class="btn green" onclick="submitPersonalHaul()">Log Haul</button></div>
@@ -1795,6 +1829,39 @@ window.pmItemSearch = function() {
 window._pmSearchResults = [];
 window._pmSelectedItem = null;
 
+const GEM_NAMES = ['Aphorite','Beradom','Carinite','Dolivine','Hadanite','Janalite','Sadaryx','Saldynium'];
+
+function getItemType(item) {
+  // Commodities are materials; items from categories are items
+  return item._type === 'commodity' ? 'material' : 'item';
+}
+
+function isGem(name) {
+  return GEM_NAMES.some(g => name?.toLowerCase().includes(g.toLowerCase()));
+}
+
+function applyTypeToForm(item, prefix) {
+  const type = getItemType(item);
+  const isItem = type === 'item';
+  const gem = !isItem && isGem(item.name);
+
+  // Set radio
+  const matRadio = document.getElementById(prefix + 'TypeMaterial');
+  const itemRadio = document.getElementById(prefix + 'TypeItem');
+  if (matRadio) matRadio.checked = !isItem;
+  if (itemRadio) itemRadio.checked = isItem;
+
+  // Quality field opacity
+  const qualField = document.getElementById(prefix + 'Qual');
+  if (qualField) qualField.style.opacity = isItem ? '0.4' : '1';
+
+  // Gem checkbox
+  const gemWrap = document.getElementById(prefix + 'GemWrap');
+  const gemCheck = document.getElementById(prefix + 'SplitGem');
+  if (gemWrap) gemWrap.style.display = isItem ? 'none' : 'flex';
+  if (gemCheck) gemCheck.checked = gem;
+}
+
 window.pmSelectItem = function(idx) {
   const item = (window._pmSearchResults || [])[idx];
   if (!item) return;
@@ -1806,7 +1873,8 @@ window.pmSelectItem = function(idx) {
   const nameEl = document.getElementById('pm-item-name');
   const typeEl = document.getElementById('pm-item-type');
   if (nameEl) nameEl.textContent = item.name;
-  if (typeEl) typeEl.textContent = item._type === 'commodity' ? 'Commodity' : (item.category_name || 'Item');
+  if (typeEl) typeEl.textContent = item._type === 'commodity' ? 'Material' : (item.category_name || 'Item');
+  applyTypeToForm(item, 'pm');
 };
 
 window.pmClearItem = function() {
@@ -1822,13 +1890,16 @@ window.submitPersonalHaul = async function() {
   const name = selectedItem ? selectedItem.name : '';
   if (!name) { alert('Search and select a material from the list first.'); return; }
   const qty = parseFloat(document.getElementById('pm-qty').value);
-  const qual = parseInt(document.getElementById('pm-qual').value);
-  const splittable = document.getElementById('pm-split').value === 'yes';
+  const isItemType = document.getElementById('pmTypeItem')?.checked;
+  const qual = parseInt(document.getElementById('pmQual')?.value) || 0;
+  const splittable = isItemType ? true : (document.getElementById('pmSplitGem')?.checked || false);
+  const itemType = isItemType ? 'item' : 'material';
   const notes = document.getElementById('pm-notes').value.trim();
-  if (isNaN(qty) || qty <= 0 || isNaN(qual) || qual < 1 || qual > 999) { alert('Fill in quantity and quality correctly.'); return; }
+  if (isNaN(qty) || qty <= 0) { alert('Enter a valid quantity.'); return; }
+  if (!isItemType && (isNaN(qual) || qual < 1 || qual > 999)) { alert('Quality must be between 1 and 999 for materials.'); return; }
 
   await push(ref(db, `personal_inventory/${window._session.memberId}`), {
-    materialName: name, qty, quality: qual, splittable, notes,
+    materialName: name, qty, quality: qual, splittable, itemType, notes,
     loggedAt: Date.now()
   });
   await loadPersonalInvCache();
@@ -1843,12 +1914,13 @@ window.renderMyInventory = async function() {
   else {
     const items = Object.entries(snap.val());
     el.innerHTML = `<div style="overflow-x:auto"><table class="tbl">
-      <thead><tr><th>Material</th><th>Qty</th><th>Quality</th><th>Grade</th><th>Notes</th><th>Logged</th><th></th></tr></thead>
+      <thead><tr><th>Name</th><th>Type</th><th>Qty</th><th>Quality</th><th>Grade</th><th>Notes</th><th>Logged</th><th></th></tr></thead>
       <tbody>` + items.map(([id, m]) => `<tr>
         <td>${m.materialName}</td>
+        <td><span style="font-size:10px;color:var(--text2)">${m.itemType === 'item' ? 'Item' : 'Material'}</span></td>
         <td>${m.qty}</td>
-        <td>${qualBarHtml(m.quality)}</td>
-        <td>${gradeBadge(m.quality)}</td>
+        <td>${m.itemType === 'item' ? '<span style="color:var(--text3)">—</span>' : qualBarHtml(m.quality)}</td>
+        <td>${m.itemType === 'item' ? '<span style="color:var(--text3)">—</span>' : gradeBadge(m.quality)}</td>
         <td style="color:var(--text2)">${m.notes || '—'}</td>
         <td style="color:var(--text2)">${tsToDate(m.loggedAt)}</td>
         <td style="display:flex;gap:6px">
@@ -1985,7 +2057,7 @@ window.renderOrgBank = function() {
           <div style="flex:1">
             <span style="font-family:'Orbitron',sans-serif;font-size:12px">${e.materialName}</span>
             <span style="color:var(--text2);font-size:11px;margin-left:12px">qty: ${e.totalQty || e.qty || '?'}</span>
-            <span style="margin-left:10px">${gradeBadge(e.quality||0)}</span>
+            <span style="margin-left:10px">${e.itemType === 'item' ? '<span style="font-size:10px;color:var(--text3)">Item</span>' : gradeBadge(e.quality||0)}</span>
           </div>
           <span style="font-size:10px;color:var(--text2)">logged by ${e.loggedBy || '—'} · ${tsToDate(e.loggedAt)}</span>
           ${isOrgHeld ? '<span class="tag" style="background:var(--purple-dim);border:1px solid rgba(160,96,255,0.3);color:var(--purple)">ORG HELD</span>' : statusBadge(e.status)}
@@ -2222,12 +2294,22 @@ window.showAddToBankModal = function() {
         <button onclick="atbClearItem()" style="background:none;border:none;color:var(--text2);cursor:pointer">×</button>
       </div>
     </div>
+    <div style="display:flex;gap:16px;margin-bottom:14px;align-items:center;flex-wrap:wrap">
+      <div style="font-size:10px;letter-spacing:1px;color:var(--text2);text-transform:uppercase">Type</div>
+      <label style="display:flex;align-items:center;gap:6px;margin:0;font-size:11px;cursor:pointer;text-transform:none;letter-spacing:0">
+        <input type="radio" name="atbType" id="atbTypeMaterial" value="material" checked> Material
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;margin:0;font-size:11px;cursor:pointer;text-transform:none;letter-spacing:0">
+        <input type="radio" name="atbType" id="atbTypeItem" value="item"> Item
+      </label>
+      <div id="atbGemWrap" style="display:flex;align-items:center;gap:6px;margin-left:8px">
+        <input type="checkbox" id="atbSplitGem" style="width:auto">
+        <label for="atbSplitGem" style="margin:0;font-size:11px;text-transform:none;letter-spacing:0;cursor:pointer">Gem (splittable)</label>
+      </div>
+    </div>
     <div class="grid2">
       <div class="field"><label>Quantity</label><input type="number" id="atb-qty" placeholder="10" min="1" step="1"></div>
-      <div class="field"><label>Quality (1-999)</label><input type="number" id="atb-qual" placeholder="500" min="1" max="999"></div>
-    </div>
-    <div class="field"><label>Splittable?</label>
-      <select id="atb-split"><option value="yes">Yes (gems/stackables)</option><option value="no">No (whole units)</option></select>
+      <div class="field"><label>Quality (1-999, optional for items)</label><input type="number" id="atb-qual" placeholder="500" min="1" max="999"></div>
     </div>
     <div class="field"><label>Source / Origin</label><input type="text" id="atb-source" placeholder="Pre-3.24 stockpile, Admin add..."></div>
     <div class="field"><label>Notes (optional)</label><input type="text" id="atb-notes" placeholder=""></div>
@@ -2283,6 +2365,7 @@ window.atbSelectItem = function(idx) {
   if (selEl) selEl.style.display = '';
   const nameEl = document.getElementById('atb-item-name');
   if (nameEl) nameEl.textContent = item.name;
+  applyTypeToForm(item, 'atb');
 };
 
 window.atbClearItem = function() {
@@ -2297,15 +2380,16 @@ window.submitAddToBank = async function() {
   const name = window._atbSelectedItem ? window._atbSelectedItem.name : '';
   if (!name) { alert('Search and select a material first.'); return; }
   const qty = parseInt(document.getElementById('atb-qty').value);
-  const qual = parseInt(document.getElementById('atb-qual').value);
-  const splittable = document.getElementById('atb-split').value === 'yes';
+  const isItemType = document.getElementById('atbTypeItem')?.checked;
+  const qual = parseInt(document.getElementById('atb-qual')?.value) || 0;
+  const splittable = isItemType ? true : (document.getElementById('atbSplitGem')?.checked || false);
+  const itemType = isItemType ? 'item' : 'material';
   const source = document.getElementById('atb-source').value.trim() || 'Manual Entry';
   const notes = document.getElementById('atb-notes').value.trim();
-  if (!name || isNaN(qty) || qty < 1 || isNaN(qual) || qual < 1 || qual > 999) {
-    alert('Fill in all required fields correctly.'); return;
-  }
+  if (!name || isNaN(qty) || qty < 1) { alert('Fill in all required fields correctly.'); return; }
+  if (!isItemType && (isNaN(qual) || qual < 1 || qual > 999)) { alert('Quality must be between 1 and 999 for materials.'); return; }
   await push(ref(db, 'org_bank'), {
-    materialName: name, totalQty: qty, quality: qual, splittable,
+    materialName: name, totalQty: qty, quality: qual, splittable, itemType,
     sourceEvent: source, sourceEventId: null,
     status: 'undistributed',
     allocations: {},
