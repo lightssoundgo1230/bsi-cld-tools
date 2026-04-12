@@ -2064,10 +2064,12 @@ window.reqItemSearch = function() {
   const results = searchUexCached(q);
   if (statusEl) statusEl.textContent = results.length + ' results';
   if (!results.length) { resultsEl.innerHTML = '<div style="font-size:11px;color:var(--text3);padding:8px">No results found.</div>'; return; }
-  resultsEl.innerHTML = results.map(item => `
+  // Store results in window so onclick can reference by index safely
+  window._uexSearchResults = results;
+  resultsEl.innerHTML = results.map((item, idx) => `
     <div style="display:flex;align-items:center;gap:10px;padding:7px 10px;border-bottom:1px solid var(--border);cursor:pointer;transition:background 0.15s"
       onmouseover="this.style.background='rgba(160,96,255,0.06)'" onmouseout="this.style.background=''"
-      onclick="addReqItem(${JSON.stringify(JSON.stringify(item))})">
+      onclick="addReqItem(${idx})">
       <div style="flex:1">
         <div style="font-size:12px">${item.name}</div>
         <div style="font-size:10px;color:var(--text2)">${item._type === 'commodity' ? 'Commodity' : (item.category_name || 'Item')}</div>
@@ -2076,14 +2078,16 @@ window.reqItemSearch = function() {
     </div>`).join('');
 };
 
-window.addReqItem = function(itemJson) {
-  const item = JSON.parse(itemJson);
+window.addReqItem = function(idx) {
+  const item = (window._uexSearchResults || [])[idx];
+  if (!item) return;
   // Don't add duplicates
   if (window._reqItems.find(i => i.id === item.id && i._type === item._type)) return;
   window._reqItems.push({ id: item.id, name: item.name, category: item.category_name || item._type, _type: item._type, qty: 1 });
   document.getElementById('req-search-results').innerHTML = '';
   document.getElementById('req-item-search').value = '';
-  document.getElementById('req-search-status').textContent = '';
+  const statusEl = document.getElementById('req-search-status');
+  if (statusEl) statusEl.textContent = '';
   renderReqItemList();
 };
 
