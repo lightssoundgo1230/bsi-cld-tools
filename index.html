@@ -429,6 +429,7 @@ label { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: 
       <button class="nav-tab" onclick="showPage('events')" id="tab-events">Events</button>
       <button class="nav-tab" onclick="showPage('myinv')" id="tab-myinv">My Inventory</button>
       <button class="nav-tab locked" id="tab-orgbank" onclick="showPage('orgbank')">Org Bank</button>
+      <button class="nav-tab locked" id="tab-reqs" onclick="showPage('reqs')">Requisitions</button>
       <button class="nav-tab locked" id="tab-admin" onclick="showPage('admin')">Admin</button>
     </div>
     <div class="topbar-user">
@@ -446,6 +447,7 @@ label { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: 
       <div class="stat-box"><div class="stat-val" id="ds-members">—</div><div class="stat-label">Active Members</div></div>
       <div class="stat-box"><div class="stat-val" id="ds-pending">—</div><div class="stat-label">Pending Distros</div></div>
       <div class="stat-box" id="ds-bank-box" style="display:none"><div class="stat-val" id="ds-bank">—</div><div class="stat-label">Bank Entries</div></div>
+      <div class="stat-box" id="ds-req-box" style="display:none"><div class="stat-val" id="ds-reqs">—</div><div class="stat-label">Open Reqs</div></div>
     </div>
     <div class="grid2">
       <div>
@@ -610,29 +612,56 @@ label { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: 
 
   <!-- ORG BANK (leadership only) -->
   <div class="page" id="page-orgbank">
-    <div class="section-title"><div class="dot" style="background:var(--gold)"></div> Org Bank</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px">
+      <div class="section-title" style="margin-bottom:0;flex:1"><div class="dot" style="background:var(--gold)"></div> Org Bank</div>
+      <button class="btn gold" id="btn-add-to-bank" style="display:none" onclick="showAddToBankModal()">+ Add to Bank</button>
+    </div>
     <div class="notice warn" id="orgbank-readonly-notice" style="display:none">You have view-only access to the Org Bank.</div>
-    <div class="grid4" style="margin-bottom:24px">
+    <div class="grid4" style="margin-bottom:20px">
       <div class="stat-box"><div class="stat-val" id="ob-total">—</div><div class="stat-label">Total Events</div></div>
-      <div class="stat-box"><div class="stat-val" id="ob-undist">—</div><div class="stat-label">Undistributed Items</div></div>
+      <div class="stat-box"><div class="stat-val" id="ob-undist">—</div><div class="stat-label">Undistributed</div></div>
       <div class="stat-box"><div class="stat-val" id="ob-members">—</div><div class="stat-label">Members Owed</div></div>
       <div class="stat-box"><div class="stat-val" id="ob-mats">—</div><div class="stat-label">Material Types</div></div>
     </div>
-    <div style="margin-bottom:18px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
-      <input type="text" id="ob-filter" placeholder="Filter by material or event..." style="max-width:320px" oninput="renderOrgBank()">
-      <select id="ob-status-filter" style="max-width:160px" onchange="renderOrgBank()">
-        <option value="">All Status</option>
-        <option value="undistributed">Undistributed</option>
-        <option value="distributed">Distributed</option>
-        <option value="committed">Committed</option>
-        <option value="spent">Spent</option>
-      </select>
+    <!-- Sub-tabs -->
+    <div style="display:flex;gap:2px;margin-bottom:20px;border-bottom:1px solid var(--border);padding-bottom:0">
+      <button class="nav-tab active" id="obtab-bank" onclick="switchOBTab('bank')" style="border-bottom:none">Undistributed</button>
+      <button class="nav-tab" id="obtab-dist" onclick="switchOBTab('dist')" style="border-bottom:none">Distribution Log</button>
+      <button class="nav-tab" id="obtab-donations" onclick="switchOBTab('donations')" style="border-bottom:none" id="obtab-donations">Donation Requests</button>
     </div>
-    <div id="obGrouped"></div>
-    <div id="donationReviewSection" style="margin-top:28px;display:none">
-      <div class="section-title" style="font-size:9px"><div class="dot" style="background:var(--purple)"></div> Pending Donation Requests</div>
-      <div id="donationReviewContent"></div>
+    <!-- Bank tab -->
+    <div id="ob-tab-bank">
+      <div style="margin-bottom:16px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+        <input type="text" id="ob-filter" placeholder="Filter by material or event..." style="max-width:320px" oninput="renderOrgBank()">
+      </div>
+      <div id="obGrouped"></div>
     </div>
+    <!-- Distribution log tab -->
+    <div id="ob-tab-dist" style="display:none">
+      <div style="margin-bottom:16px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+        <input type="text" id="dist-filter" placeholder="Filter by member or material..." style="max-width:320px" oninput="renderDistLog()">
+      </div>
+      <div id="distLogContent"><div class="empty">No distributions recorded yet.</div></div>
+    </div>
+    <!-- Donations tab -->
+    <div id="ob-tab-donations" style="display:none">
+      <div id="donationReviewContent"><div class="empty">No pending donation requests.</div></div>
+    </div>
+  </div>
+
+  <!-- REQUISITIONS -->
+  <div class="page" id="page-reqs">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px">
+      <div class="section-title" style="margin-bottom:0;flex:1"><div class="dot" style="background:var(--purple)"></div> Requisitions</div>
+      <button class="btn" style="border-color:var(--purple);color:var(--purple)" id="btn-new-req" onclick="showNewReqModal()">+ New Requisition</button>
+    </div>
+    <div style="display:flex;gap:2px;margin-bottom:20px;border-bottom:1px solid var(--border)">
+      <button class="nav-tab active" id="reqtab-open" onclick="switchReqTab('open')" style="border-bottom:none">Open</button>
+      <button class="nav-tab" id="reqtab-approved" onclick="switchReqTab('approved')" style="border-bottom:none">Approved</button>
+      <button class="nav-tab" id="reqtab-denied" onclick="switchReqTab('denied')" style="border-bottom:none">Denied</button>
+      <button class="nav-tab" id="reqtab-fulfilled" onclick="switchReqTab('fulfilled')" style="border-bottom:none">Fulfilled</button>
+    </div>
+    <div id="reqsList"><div class="empty">No requisitions yet.</div></div>
   </div>
 
   <!-- ADMIN (CLD Leadership only) -->
@@ -650,6 +679,15 @@ label { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: 
           <div id="adminCodes"><div class="empty">Loading...</div></div>
           <div class="btn-row"><button class="btn orange" onclick="saveInviteCodes()">Save Codes</button></div>
         </div>
+      </div>
+    </div>
+    <div style="margin-top:24px">
+      <div class="section-title" style="font-size:9px"><div class="dot" style="background:var(--accent)"></div> UEX API Token</div>
+      <div class="card">
+        <div class="notice info" style="margin-bottom:14px">Required for the Requisitions item search. Get your token from uexcorp.space/api/apps. Rotate it if compromised.</div>
+        <div class="field"><label>Bearer Token</label><input type="password" id="uex-token-input" placeholder="Paste your UEX API token here"></div>
+        <div class="btn-row"><button class="btn" onclick="saveUexToken()">Save Token</button>
+        <button class="btn sm" onclick="toggleUexTokenVisibility()">Show/Hide</button></div>
       </div>
     </div>
     <div style="margin-top:24px">
@@ -694,24 +732,27 @@ const db = getDatabase(fbApp);
 
 // ── Default invite codes (stored in Firebase, overridable by admin) ──
 const DEFAULT_CODES = {
-  member:           'YL7I-H7W4-7D5L',
-  event_organizer:  '0XKZ-YQ34-LIKL',
-  general_leadership: 'N8F7-0G8B-I5SX',
-  cld_leadership:   'L4KR-TD36-2254'
+  member:               'YL7I-H7W4-7D5L',
+  event_organizer:      '0XKZ-YQ34-LIKL',
+  general_leadership:   'N8F7-0G8B-I5SX',
+  cld_leadership:       'L4KR-TD36-2254',
+  director_of_commerce: 'R782-P4AZ-OAZ4'
 };
 
 const ROLE_LABELS = {
   member: 'Member',
   event_organizer: 'Event Organizer',
   general_leadership: 'Gen. Leadership',
-  cld_leadership: 'CLD Leadership'
+  cld_leadership: 'CLD Leadership',
+  director_of_commerce: 'Dir. of Commerce'
 };
 
 const ROLE_COLORS = {
   member: 'var(--text2)',
   event_organizer: 'var(--accent)',
   general_leadership: 'var(--purple)',
-  cld_leadership: 'var(--gold)'
+  cld_leadership: 'var(--gold)',
+  director_of_commerce: 'var(--green)'
 };
 
 const QUALITY_GRADES = [
@@ -730,7 +771,10 @@ window._orgBankData = {};
 window._membersData = {};
 window._eventsData = {};
 window._donationsData = {};
+window._distLogData = {};
 window._currentCodes = { ...DEFAULT_CODES };
+window._reqsData = {};
+window._uexToken = '';
 
 // ── Helpers ──
 function qualGrade(q) {
@@ -789,10 +833,13 @@ function fmtDur(mins) {
 function can(action) {
   const r = window._session?.role;
   switch (action) {
-    case 'run_event': return ['event_organizer','cld_leadership'].includes(r);
-    case 'view_orgbank': return ['general_leadership','cld_leadership'].includes(r);
-    case 'edit_orgbank': return r === 'cld_leadership';
-    case 'admin': return r === 'cld_leadership';
+    case 'run_event':      return ['event_organizer','cld_leadership','director_of_commerce'].includes(r);
+    case 'view_orgbank':   return ['general_leadership','cld_leadership','director_of_commerce'].includes(r);
+    case 'edit_orgbank':   return ['cld_leadership','director_of_commerce'].includes(r);
+    case 'admin':          return ['cld_leadership','director_of_commerce'].includes(r);
+    case 'approve_req':    return r === 'director_of_commerce';
+    case 'submit_req':     return ['general_leadership','cld_leadership','director_of_commerce'].includes(r);
+    case 'view_req':       return ['general_leadership','cld_leadership','director_of_commerce'].includes(r);
   }
   return false;
 }
@@ -898,11 +945,13 @@ function setupUI() {
     document.getElementById('ds-bank-box').style.display = '';
   }
   if (can('admin')) document.getElementById('tab-admin').classList.remove('locked');
+  if (can('submit_req') || can('view_req')) document.getElementById('tab-reqs').classList.remove('locked');
+  if (!can('submit_req')) document.getElementById('btn-new-req').style.display = 'none';
 }
 
 // ── Navigation ──
 window.showPage = function(page) {
-  const locked = { orgbank: !can('view_orgbank'), admin: !can('admin') };
+  const locked = { orgbank: !can('view_orgbank'), admin: !can('admin'), reqs: !can('submit_req') && !can('view_req') };
   if (locked[page]) return;
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
@@ -915,6 +964,7 @@ window.showPage = function(page) {
   if (page === 'myinv') renderMyInventory();
   if (page === 'admin') renderAdmin();
   if (page === 'dashboard') renderDashboard();
+  if (page === 'reqs') renderReqs();
 };
 
 // ── Load all data ──
@@ -939,8 +989,20 @@ function loadAll() {
     if (document.getElementById('page-myinv').classList.contains('active')) renderMyInventory();
     renderDashboard();
   });
+  onValue(ref(db, 'dist_log'), snap => {
+    window._distLogData = snap.val() || {};
+    if (document.getElementById('ob-tab-dist') && document.getElementById('ob-tab-dist').style.display !== 'none') renderDistLog();
+  });
   onValue(ref(db, 'config/invite_codes'), snap => {
     if (snap.exists()) window._currentCodes = snap.val();
+  });
+  onValue(ref(db, 'requisitions'), snap => {
+    window._reqsData = snap.val() || {};
+    if (document.getElementById('page-reqs')?.classList.contains('active')) renderReqs();
+    renderDashboard();
+  });
+  onValue(ref(db, 'config/uex_token'), snap => {
+    if (snap.exists()) window._uexToken = snap.val();
   });
 }
 
@@ -955,6 +1017,10 @@ function renderDashboard() {
   document.getElementById('ds-members').textContent = members.length;
   document.getElementById('ds-pending').textContent = events.filter(e => e.status === 'review').length;
   if (can('view_orgbank')) document.getElementById('ds-bank').textContent = bank.length;
+  if (can('view_req') || can('submit_req')) {
+    document.getElementById('ds-req-box').style.display = '';
+    document.getElementById('ds-reqs').textContent = Object.values(window._reqsData).filter(r => r.status === 'pending').length;
+  }
 
   // Recent events
   const evEl = document.getElementById('dashEvents');
@@ -1354,119 +1420,272 @@ window.deletePersonalItem = async function(id) {
 };
 
 // ── Org Bank ──
+window.switchOBTab = function(tab) {
+  ['bank','dist','donations'].forEach(t => {
+    document.getElementById('ob-tab-' + t).style.display = t === tab ? '' : 'none';
+    document.getElementById('obtab-' + t)?.classList.toggle('active', t === tab);
+  });
+  if (tab === 'dist') renderDistLog();
+  if (tab === 'donations') renderDonationRequests();
+};
+
 window.renderOrgBank = function() {
   if (!can('view_orgbank')) return;
   const isEdit = can('edit_orgbank');
-  const filter = document.getElementById('ob-filter')?.value.toLowerCase() || '';
-  const statusFilter = document.getElementById('ob-status-filter')?.value || '';
+  if (isEdit) document.getElementById('btn-add-to-bank').style.display = '';
   if (!isEdit) document.getElementById('orgbank-readonly-notice').style.display = '';
 
   const all = Object.values(window._orgBankData);
   const allEntries = Object.entries(window._orgBankData);
+  const filter = document.getElementById('ob-filter')?.value.toLowerCase() || '';
 
-  // Stats
+  // Stats — only count undistributed entries
+  const undistEntries = all.filter(e => e.status === 'undistributed');
   const allMembers = new Set();
   const allMatNames = new Set();
-  all.forEach(e => {
+  undistEntries.forEach(e => {
     allMatNames.add(e.materialName);
     if (e.allocations) Object.keys(e.allocations).forEach(u => allMembers.add(u));
   });
-  const eventIds = new Set(all.map(e => e.sourceEventId).filter(Boolean));
-  document.getElementById('ob-total').textContent = eventIds.size || allEntries.length;
-  document.getElementById('ob-undist').textContent = all.filter(e => e.status === 'undistributed').length;
+  const eventIds = new Set(undistEntries.map(e => e.sourceEventId).filter(Boolean));
+  document.getElementById('ob-total').textContent = eventIds.size || undistEntries.length;
+  document.getElementById('ob-undist').textContent = undistEntries.length;
   document.getElementById('ob-members').textContent = allMembers.size;
   document.getElementById('ob-mats').textContent = allMatNames.size;
 
-  // Filter
+  // Only show undistributed + org_held in the bank tab
   const filtered = allEntries.filter(([, e]) => {
+    const matchStatus = e.status === 'undistributed' || e.status === 'org_held';
     const matchText = !filter || e.materialName?.toLowerCase().includes(filter) || e.sourceEvent?.toLowerCase().includes(filter);
-    const matchStatus = !statusFilter || e.status === statusFilter;
-    return matchText && matchStatus;
+    return matchStatus && matchText;
   });
 
   // Group by event
   const byEvent = {};
   filtered.forEach(([id, e]) => {
-    const key = e.sourceEventId || '__no_event__';
-    if (!byEvent[key]) byEvent[key] = { name: e.sourceEvent || 'Unknown Event', date: e.loggedAt, items: [] };
+    const key = e.sourceEventId || e.loggedAt + '_manual';
+    if (!byEvent[key]) byEvent[key] = { name: e.sourceEvent || 'Manual Entry', date: e.loggedAt, items: [] };
     byEvent[key].items.push([id, e]);
   });
 
   const container = document.getElementById('obGrouped');
-  if (!filtered.length) { container.innerHTML = '<div class="empty">No entries match filter.</div>'; }
-  else {
-    container.innerHTML = Object.entries(byEvent).sort((a,b) => (b[1].date||0)-(a[1].date||0)).map(([evKey, group]) => {
-      const itemsHtml = group.items.map(([id, e]) => {
-        const allocs = e.allocations ? Object.entries(e.allocations) : [];
-        const allocRows = allocs.map(([user, qty]) =>
-          `<div style="display:flex;align-items:center;gap:12px;padding:6px 0;border-bottom:1px solid rgba(26,45,63,0.4)">
-            <span style="flex:1;font-size:11px;color:var(--text2)">⤷ ${user}</span>
-            <span style="font-size:11px;color:var(--text)">${qty} units</span>
-          </div>`).join('');
+  if (!filtered.length) { container.innerHTML = '<div class="empty">No undistributed items.</div>'; return; }
 
-        return `<div style="background:var(--panel2);border:1px solid var(--border);margin-bottom:8px;border-radius:1px">
-          <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;cursor:pointer" onclick="toggleAllocPanel('alloc_${id}')">
-            <div style="flex:1">
-              <span style="font-family:'Orbitron',sans-serif;font-size:12px">${e.materialName}</span>
-              <span style="color:var(--text2);font-size:11px;margin-left:12px">total: ${e.totalQty || e.qty || '?'}</span>
-              <span style="margin-left:10px">${gradeBadge(e.quality||0)}</span>
-            </div>
-            <span style="font-size:10px;color:var(--text2)">logged by ${e.loggedBy || '—'} · ${tsToDate(e.loggedAt)}</span>
-            ${statusBadge(e.status)}
-            ${isEdit ? `<select onchange="updateBankStatus('${id}', this.value);event.stopPropagation()" style="font-size:10px;padding:4px 8px;width:auto;background:var(--bg2)" onclick="event.stopPropagation()">
-              <option value="undistributed" ${e.status==='undistributed'?'selected':''}>Undistributed</option>
-              <option value="distributed" ${e.status==='distributed'?'selected':''}>Distributed</option>
-              <option value="committed" ${e.status==='committed'?'selected':''}>Committed</option>
-              <option value="spent" ${e.status==='spent'?'selected':''}>Spent</option>
-            </select>
-            <button class="btn sm red" onclick="deleteBankEntry('${id}');event.stopPropagation()">Delete</button>` : ''}
-            <span style="color:var(--text2);font-size:14px">▾</span>
-          </div>
-          <div id="alloc_${id}" style="display:none;padding:0 16px 12px;border-top:1px solid var(--border)">
-            <div style="font-size:9px;letter-spacing:2px;color:var(--text2);text-transform:uppercase;margin:10px 0 6px">Allocations</div>
-            ${allocs.length ? allocRows : '<div style="font-size:11px;color:var(--text3);padding:8px 0">No allocations recorded.</div>'}
-          </div>
-        </div>`;
-      }).join('');
+  container.innerHTML = Object.entries(byEvent).sort((a,b) => (b[1].date||0)-(a[1].date||0)).map(([evKey, group]) => {
+    const itemsHtml = group.items.map(([id, e]) => {
+      const allocs = e.allocations ? Object.entries(e.allocations) : [];
+      const isOrgHeld = e.status === 'org_held';
 
-      return `<div style="margin-bottom:20px">
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
-          <div style="font-family:'Orbitron',sans-serif;font-size:11px;color:var(--orange);letter-spacing:2px">${group.name}</div>
-          <div style="font-size:10px;color:var(--text2)">${tsToDate(group.date)}</div>
-          <div style="flex:1;height:1px;background:var(--border)"></div>
-          ${isEdit ? `<button class="btn sm red" onclick="deleteEventFromBank('${evKey}')">Delete Event</button>` : ''}
+      const allocRows = allocs.map(([user, qty]) =>
+        `<div style="display:flex;align-items:center;gap:12px;padding:7px 0;border-bottom:1px solid rgba(26,45,63,0.4)">
+          <span style="flex:1;font-size:11px;color:var(--text2)">⤷ ${user}</span>
+          <span style="font-size:11px;color:var(--text)">${qty} units</span>
+        </div>`).join('');
+
+      return `<div style="background:var(--panel2);border:1px solid var(--border);margin-bottom:8px">
+        <div style="display:flex;align-items:center;gap:10px;padding:12px 16px;cursor:pointer" onclick="toggleAllocPanel('alloc_${id}')">
+          <div style="flex:1">
+            <span style="font-family:'Orbitron',sans-serif;font-size:12px">${e.materialName}</span>
+            <span style="color:var(--text2);font-size:11px;margin-left:12px">qty: ${e.totalQty || e.qty || '?'}</span>
+            <span style="margin-left:10px">${gradeBadge(e.quality||0)}</span>
+          </div>
+          <span style="font-size:10px;color:var(--text2)">logged by ${e.loggedBy || '—'} · ${tsToDate(e.loggedAt)}</span>
+          ${isOrgHeld ? '<span class="tag" style="background:var(--purple-dim);border:1px solid rgba(160,96,255,0.3);color:var(--purple)">ORG HELD</span>' : statusBadge(e.status)}
+          ${isEdit ? `
+            <button class="btn sm orange" onclick="showAllocateModal('${id}');event.stopPropagation()">Allocate</button>
+            ${!isOrgHeld ? `<button class="btn sm" style="border-color:var(--purple);color:var(--purple)" onclick="markOrgHeld('${id}');event.stopPropagation()">Org Keep</button>` : `<button class="btn sm orange" onclick="markUndistributed('${id}');event.stopPropagation()">Unhold</button>`}
+            <button class="btn sm red" onclick="deleteBankEntry('${id}');event.stopPropagation()">×</button>
+          ` : ''}
+          <span style="color:var(--text2);font-size:12px;margin-left:4px">▾</span>
         </div>
-        ${itemsHtml}
+        <div id="alloc_${id}" style="display:none;padding:0 16px 12px;border-top:1px solid var(--border)">
+          <div style="font-size:9px;letter-spacing:2px;color:var(--text2);text-transform:uppercase;margin:10px 0 6px">Planned Allocations</div>
+          ${allocs.length ? allocRows : '<div style="font-size:11px;color:var(--text3);padding:8px 0">No allocations recorded — use Allocate to assign.</div>'}
+        </div>
       </div>`;
     }).join('');
+
+    return `<div style="margin-bottom:24px">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+        <div style="font-family:'Orbitron',sans-serif;font-size:11px;color:var(--orange);letter-spacing:2px">${group.name}</div>
+        <div style="font-size:10px;color:var(--text2)">${tsToDate(group.date)}</div>
+        <div style="flex:1;height:1px;background:var(--border)"></div>
+        ${isEdit ? `<button class="btn sm red" onclick="deleteEventFromBank('${evKey}')">Delete Event</button>` : ''}
+      </div>
+      ${itemsHtml}
+    </div>`;
+  }).join('');
+};
+
+window.renderDistLog = function() {
+  if (!can('view_orgbank')) return;
+  const filter = document.getElementById('dist-filter')?.value.toLowerCase() || '';
+  const distEntries = Object.entries(window._distLogData || {});
+  const filtered = distEntries.filter(([, d]) =>
+    !filter || d.member?.toLowerCase().includes(filter) || d.materialName?.toLowerCase().includes(filter) || d.sourceEvent?.toLowerCase().includes(filter)
+  ).sort((a,b) => (b[1].distributedAt||0) - (a[1].distributedAt||0));
+
+  const el = document.getElementById('distLogContent');
+  if (!filtered.length) { el.innerHTML = '<div class="empty">No distributions recorded yet.</div>'; return; }
+
+  // Group by member for easy lookup
+  const byMember = {};
+  filtered.forEach(([id, d]) => {
+    if (!byMember[d.member]) byMember[d.member] = [];
+    byMember[d.member].push([id, d]);
+  });
+
+  el.innerHTML = Object.entries(byMember).map(([member, items]) => `
+    <div style="margin-bottom:20px">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
+        <div style="font-family:'Orbitron',sans-serif;font-size:11px;color:var(--accent);letter-spacing:2px">${member}</div>
+        <div style="flex:1;height:1px;background:var(--border)"></div>
+        <div style="font-size:10px;color:var(--text2)">${items.length} distribution${items.length !== 1 ? 's' : ''}</div>
+      </div>
+      <table class="tbl">
+        <thead><tr><th>Material</th><th>Qty</th><th>Quality</th><th>Source Event</th><th>Distributed</th><th>Notes</th>${can('edit_orgbank') ? '<th></th>' : ''}</tr></thead>
+        <tbody>${items.map(([id, d]) => `<tr>
+          <td style="font-weight:600">${d.materialName}</td>
+          <td>${d.qty}</td>
+          <td>${gradeBadge(d.quality||0)}</td>
+          <td style="color:var(--text2);font-size:11px">${d.sourceEvent || '—'}</td>
+          <td style="color:var(--text2);font-size:11px">${tsToDate(d.distributedAt)}</td>
+          <td style="color:var(--text2);font-size:11px">${d.notes || '—'}</td>
+          ${can('edit_orgbank') ? `<td><button class="btn sm red" onclick="deleteDistEntry('${id}')">×</button></td>` : ''}
+        </tr>`).join('')}</tbody>
+      </table>
+    </div>`).join('');
+};
+
+window.renderDonationRequests = function() {
+  if (!can('view_orgbank')) return;
+  const isEdit = can('edit_orgbank');
+  const pendingDons = Object.entries(window._donationsData).filter(([,d]) => d.status === 'pending');
+  const el = document.getElementById('donationReviewContent');
+  if (!pendingDons.length) { el.innerHTML = '<div class="empty">No pending donation requests.</div>'; return; }
+  el.innerHTML = pendingDons.map(([id, d]) => `
+    <div class="card" style="margin-bottom:10px">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div style="flex:1">
+          <div style="font-size:12px"><strong>${d.fromUsername}</strong> wants to donate <strong>${d.materialName} × ${d.qty}</strong> (Q:${d.quality})</div>
+          <div style="font-size:10px;color:var(--text2);margin-top:4px">${d.notes || 'No notes'} · ${tsToDate(d.requestedAt)}</div>
+        </div>
+        ${isEdit ? `<button class="btn sm green" onclick="approveDonation('${id}')">Approve</button>
+        <button class="btn sm red" onclick="rejectDonation('${id}')">Reject</button>` : ''}
+      </div>
+    </div>`).join('');
+};
+
+// ── Allocate modal ──
+window.showAllocateModal = function(entryId) {
+  const e = window._orgBankData[entryId];
+  if (!e) return;
+  window._allocatingEntryId = entryId;
+  const allocs = e.allocations ? Object.entries(e.allocations) : [];
+
+  const rows = allocs.length
+    ? allocs.map(([user, qty], i) => allocRowHtml(i, user, qty)).join('')
+    : allocRowHtml(0, '', '');
+
+  document.getElementById('modalTitle').textContent = 'ALLOCATE — ' + e.materialName;
+  document.getElementById('modalBody').innerHTML = `
+    <div style="margin-bottom:12px">
+      <span style="font-size:11px;color:var(--text2)">Total qty: <strong style="color:var(--text)">${e.totalQty || e.qty}</strong> · ${gradeBadge(e.quality||0)} · Source: ${e.sourceEvent || 'Manual'}</span>
+    </div>
+    <div style="font-size:9px;letter-spacing:2px;color:var(--text2);text-transform:uppercase;margin-bottom:8px">Recipients</div>
+    <div id="allocRows">${rows}</div>
+    <button class="btn sm" style="margin-top:10px" onclick="addAllocRow()">+ Add Row</button>
+    <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
+      <div class="field"><label>Notes (optional)</label><input type="text" id="alloc-notes" placeholder="Distributed at CRU-L1..."></div>
+    </div>
+    <div class="btn-row" style="margin-top:16px">
+      <button class="btn green" onclick="confirmAllocate(false)">Mark Distributed</button>
+      <button class="btn" style="border-color:var(--purple);color:var(--purple)" onclick="confirmAllocate(true)">Partial — Keep Remainder</button>
+    </div>
+  `;
+  document.getElementById('modalOverlay').style.display = 'flex';
+};
+
+function allocRowHtml(i, user, qty) {
+  return `<div class="review-alloc-row" id="allocrow_${i}" style="margin-bottom:8px">
+    <input type="text" placeholder="Discord username" value="${user}" id="alloc-user-${i}" style="flex:2">
+    <input type="number" placeholder="qty" value="${qty}" id="alloc-qty-${i}" min="0" step="1" style="flex:1;max-width:90px">
+    <button class="btn sm red" onclick="removeAllocRow(${i})" style="flex-shrink:0">×</button>
+  </div>`;
+}
+
+window._allocRowCount = 0;
+window.addAllocRow = function() {
+  window._allocRowCount++;
+  const container = document.getElementById('allocRows');
+  const div = document.createElement('div');
+  div.innerHTML = allocRowHtml(window._allocRowCount, '', '');
+  container.appendChild(div.firstChild);
+};
+
+window.removeAllocRow = function(i) {
+  const el = document.getElementById('allocrow_' + i);
+  if (el) el.remove();
+};
+
+window.confirmAllocate = async function(keepRemainder) {
+  const entryId = window._allocatingEntryId;
+  const e = window._orgBankData[entryId];
+  if (!e || !entryId) return;
+  const notes = document.getElementById('alloc-notes')?.value.trim() || '';
+
+  // Collect rows
+  const rows = document.querySelectorAll('[id^="allocrow_"]');
+  const distributions = [];
+  rows.forEach(row => {
+    const i = row.id.replace('allocrow_', '');
+    const user = document.getElementById('alloc-user-' + i)?.value.trim();
+    const qty = parseInt(document.getElementById('alloc-qty-' + i)?.value);
+    if (user && qty > 0) distributions.push({ user, qty });
+  });
+
+  if (!distributions.length) { alert('Add at least one recipient.'); return; }
+
+  // Write distribution log entries
+  for (const d of distributions) {
+    await push(ref(db, 'dist_log'), {
+      member: d.user,
+      materialName: e.materialName,
+      qty: d.qty,
+      quality: e.quality || 0,
+      sourceEvent: e.sourceEvent || 'Manual Entry',
+      sourceEventId: e.sourceEventId || null,
+      bankEntryId: entryId,
+      notes,
+      distributedBy: window._session.username,
+      distributedAt: Date.now()
+    });
   }
 
-  // Donation review
-  const pendingDons = Object.entries(window._donationsData).filter(([,d]) => d.status === 'pending');
-  const donSec = document.getElementById('donationReviewSection');
-  if (isEdit && pendingDons.length) {
-    donSec.style.display = '';
-    document.getElementById('donationReviewContent').innerHTML = pendingDons.map(([id, d]) => `
-      <div class="card" style="margin-bottom:10px">
-        <div style="display:flex;align-items:center;gap:12px">
-          <div style="flex:1">
-            <div style="font-size:12px"><strong>${d.fromUsername}</strong> wants to donate <strong>${d.materialName} × ${d.qty}</strong> (Q:${d.quality})</div>
-            <div style="font-size:10px;color:var(--text2);margin-top:4px">${d.notes || 'No notes'} · ${tsToDate(d.requestedAt)}</div>
-          </div>
-          <button class="btn sm green" onclick="approveDonation('${id}')">Approve</button>
-          <button class="btn sm red" onclick="rejectDonation('${id}')">Reject</button>
-        </div>
-      </div>`).join('');
-  } else donSec.style.display = 'none';
+  if (keepRemainder) {
+    // Update allocations on the entry, leave as undistributed
+    const newAllocs = {};
+    distributions.forEach(d => newAllocs[d.user] = d.qty);
+    await update(ref(db, 'org_bank/' + entryId), { allocations: newAllocs });
+  } else {
+    // Flip to distributed
+    await update(ref(db, 'org_bank/' + entryId), { status: 'distributed' });
+  }
+
+  closeModalDirect();
+};
+
+window.markOrgHeld = async function(id) {
+  await update(ref(db, 'org_bank/' + id), { status: 'org_held', allocations: {} });
+};
+
+window.markUndistributed = async function(id) {
+  await update(ref(db, 'org_bank/' + id), { status: 'undistributed' });
 };
 
 window.toggleAllocPanel = function(id) {
   const el = document.getElementById(id);
   if (el) el.style.display = el.style.display === 'none' ? '' : 'none';
-};
-
-window.updateBankStatus = async function(id, status) {
-  await update(ref(db, 'org_bank/' + id), { status });
 };
 
 window.deleteBankEntry = async function(id) {
@@ -1475,34 +1694,474 @@ window.deleteBankEntry = async function(id) {
 };
 
 window.deleteEventFromBank = async function(evKey) {
-  if (!confirm('Delete ALL material entries for this event from the Org Bank? This cannot be undone.')) return;
-  const entries = Object.entries(window._orgBankData).filter(([, e]) => (e.sourceEventId || '__no_event__') === evKey);
-  for (const [id] of entries) {
-    await remove(ref(db, 'org_bank/' + id));
+  if (!confirm('Delete ALL entries for this event from the Org Bank? This cannot be undone.')) return;
+  const entries = Object.entries(window._orgBankData).filter(([, e]) => {
+    const key = e.sourceEventId || e.loggedAt + '_manual';
+    return key === evKey;
+  });
+  for (const [id] of entries) await remove(ref(db, 'org_bank/' + id));
+  if (!evKey.endsWith('_manual')) await remove(ref(db, 'events/' + evKey));
+};
+
+window.deleteDistEntry = async function(id) {
+  if (!confirm('Remove this distribution record?')) return;
+  await remove(ref(db, 'dist_log/' + id));
+};
+
+window.showAddToBankModal = function() {
+  document.getElementById('modalTitle').textContent = 'ADD TO ORG BANK';
+  document.getElementById('modalBody').innerHTML = `
+    <div class="field"><label>Material Name</label><input type="text" id="atb-name" placeholder="Quantanium"></div>
+    <div class="grid2">
+      <div class="field"><label>Quantity</label><input type="number" id="atb-qty" placeholder="10" min="1" step="1"></div>
+      <div class="field"><label>Quality (1-999)</label><input type="number" id="atb-qual" placeholder="500" min="1" max="999"></div>
+    </div>
+    <div class="field"><label>Splittable?</label>
+      <select id="atb-split"><option value="yes">Yes (gems/stackables)</option><option value="no">No (whole units)</option></select>
+    </div>
+    <div class="field"><label>Source / Origin</label><input type="text" id="atb-source" placeholder="Pre-3.24 stockpile, Admin add..."></div>
+    <div class="field"><label>Notes (optional)</label><input type="text" id="atb-notes" placeholder=""></div>
+    <div class="btn-row"><button class="btn gold" onclick="submitAddToBank()">Add to Bank</button></div>
+  `;
+  document.getElementById('modalOverlay').style.display = 'flex';
+};
+
+window.submitAddToBank = async function() {
+  const name = document.getElementById('atb-name').value.trim();
+  const qty = parseInt(document.getElementById('atb-qty').value);
+  const qual = parseInt(document.getElementById('atb-qual').value);
+  const splittable = document.getElementById('atb-split').value === 'yes';
+  const source = document.getElementById('atb-source').value.trim() || 'Manual Entry';
+  const notes = document.getElementById('atb-notes').value.trim();
+  if (!name || isNaN(qty) || qty < 1 || isNaN(qual) || qual < 1 || qual > 999) {
+    alert('Fill in all required fields correctly.'); return;
   }
-  // Also delete the event record itself
-  if (evKey !== '__no_event__') {
-    await remove(ref(db, 'events/' + evKey));
-  }
+  await push(ref(db, 'org_bank'), {
+    materialName: name, totalQty: qty, quality: qual, splittable,
+    sourceEvent: source, sourceEventId: null,
+    status: 'undistributed',
+    allocations: {},
+    notes,
+    loggedBy: window._session.username,
+    loggedAt: Date.now()
+  });
+  closeModalDirect();
 };
 
 window.approveDonation = async function(id) {
   const don = window._donationsData[id];
   if (!don) return;
   await push(ref(db, 'org_bank'), {
-    materialName: don.materialName, qty: don.qty, quality: don.quality,
-    custodian: don.fromUsername,
+    materialName: don.materialName, totalQty: don.qty, quality: don.quality,
     sourceEvent: 'Personal Donation',
     sourceEventId: null,
     status: 'undistributed',
+    allocations: {},
     loggedBy: window._session.username,
     loggedAt: Date.now()
   });
-  await update(ref(db, `donations/${id}`), { status: 'approved', reviewedBy: window._session.username, reviewedAt: Date.now() });
+  await update(ref(db, 'donations/' + id), { status: 'approved', reviewedBy: window._session.username, reviewedAt: Date.now() });
 };
 
 window.rejectDonation = async function(id) {
-  await update(ref(db, `donations/${id}`), { status: 'rejected', reviewedBy: window._session.username, reviewedAt: Date.now() });
+  await update(ref(db, 'donations/' + id), { status: 'rejected', reviewedBy: window._session.username, reviewedAt: Date.now() });
+};
+
+// ── UEX API ──
+async function uexGet(endpoint) {
+  const token = window._uexToken;
+  if (!token) throw new Error('No UEX token configured. Ask CLD Leadership to add it in Admin.');
+  const res = await fetch(`https://api.uexcorp.space/2.0/${endpoint}`, {
+    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
+  });
+  if (!res.ok) throw new Error(`UEX API error: ${res.status}`);
+  const data = await res.json();
+  return data.data || [];
+}
+
+// Cache UEX search results in memory to avoid hammering the API
+window._uexItemCache = null;
+window._uexCommodityCache = null;
+
+async function searchUexItems(query) {
+  if (!window._uexItemCache) {
+    const [items, commodities] = await Promise.all([
+      uexGet('items/'),
+      uexGet('commodities/')
+    ]);
+    window._uexItemCache = (items || []).map(i => ({ ...i, _type: 'item' }));
+    window._uexCommodityCache = (commodities || []).map(c => ({ ...c, _type: 'commodity' }));
+  }
+  const q = query.toLowerCase();
+  const itemResults = window._uexItemCache.filter(i => i.name?.toLowerCase().includes(q)).slice(0, 15);
+  const commResults = window._uexCommodityCache.filter(c => c.name?.toLowerCase().includes(q)).slice(0, 10);
+  return [...itemResults, ...commResults];
+}
+
+async function getItemPrices(itemId, type) {
+  try {
+    if (type === 'commodity') {
+      const data = await uexGet(`commodities_prices/id_commodity/${itemId}/`);
+      return (data || []).filter(p => p.price_buy > 0).map(p => ({
+        terminal: p.terminal_name || p.id_terminal,
+        location: p.star_system_name + ' › ' + (p.planet_name || p.space_station_name || p.outpost_name || ''),
+        price: p.price_buy,
+        scu: p.scu_buy || 0
+      }));
+    } else {
+      const data = await uexGet(`items_prices/id_item/${itemId}/`);
+      return (data || []).filter(p => p.price_buy > 0).map(p => ({
+        terminal: p.terminal_name || p.id_terminal,
+        location: (p.star_system_name || '') + ' › ' + (p.planet_name || p.space_station_name || p.outpost_name || ''),
+        price: p.price_buy,
+        scu: null
+      }));
+    }
+  } catch(e) { return []; }
+}
+
+// Location clustering — find terminals that cover the most items on the list
+function clusterByLocation(itemPricesMap) {
+  // itemPricesMap: { itemName: [{ terminal, location, price }] }
+  const terminalScore = {};
+  const terminalItems = {};
+  for (const [itemName, prices] of Object.entries(itemPricesMap)) {
+    const seen = new Set();
+    for (const p of prices) {
+      if (seen.has(p.terminal)) continue;
+      seen.add(p.terminal);
+      if (!terminalScore[p.terminal]) { terminalScore[p.terminal] = 0; terminalItems[p.terminal] = []; }
+      terminalScore[p.terminal]++;
+      terminalItems[p.terminal].push({ itemName, price: p.price, location: p.location });
+    }
+  }
+  return Object.entries(terminalScore)
+    .sort((a,b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([terminal, count]) => ({ terminal, count, items: terminalItems[terminal] }));
+}
+
+// ── Requisitions ──
+window._reqTab = 'open';
+window._reqItems = []; // current new req shopping list
+window._reqPrices = {}; // itemName -> prices array
+
+window.switchReqTab = function(tab) {
+  window._reqTab = tab;
+  ['open','approved','denied','fulfilled'].forEach(t => {
+    document.getElementById('reqtab-' + t)?.classList.toggle('active', t === tab);
+  });
+  renderReqs();
+};
+
+function reqStatusBadge(s) {
+  const map = {
+    pending:   ['var(--orange)', 'PENDING'],
+    approved:  ['var(--green)',  'APPROVED'],
+    denied:    ['var(--red)',    'DENIED'],
+    fulfilled: ['var(--accent)', 'FULFILLED']
+  };
+  const [c, l] = map[s] || ['var(--text2)', s.toUpperCase()];
+  return `<span class="tag" style="background:${c}22;border:1px solid ${c}44;color:${c}">${l}</span>`;
+}
+
+function priorityBadge(p) {
+  const map = { Low: 'var(--text2)', Standard: 'var(--accent)', Urgent: 'var(--red)' };
+  const c = map[p] || 'var(--text2)';
+  return `<span class="tag" style="background:${c}22;border:1px solid ${c}44;color:${c}">${p || 'Standard'}</span>`;
+}
+
+window.renderReqs = function() {
+  const tab = window._reqTab || 'open';
+  const statusMap = { open: 'pending', approved: 'approved', denied: 'denied', fulfilled: 'fulfilled' };
+  const targetStatus = statusMap[tab];
+  const myUsername = window._session?.username;
+  const isViewer = can('view_req');
+  const isApprover = can('approve_req');
+
+  let reqs = Object.entries(window._reqsData).filter(([, r]) => r.status === targetStatus);
+  // Members only see their own
+  if (!isViewer) reqs = reqs.filter(([, r]) => r.submittedBy === myUsername);
+  reqs.sort((a,b) => (b[1].submittedAt||0) - (a[1].submittedAt||0));
+
+  const el = document.getElementById('reqsList');
+  if (!reqs.length) { el.innerHTML = '<div class="empty">No ' + tab + ' requisitions.</div>'; return; }
+
+  el.innerHTML = reqs.map(([id, r]) => {
+    const items = r.items || [];
+    const bankCheck = items.map(item => {
+      const inBank = Object.values(window._orgBankData).filter(e =>
+        e.materialName?.toLowerCase() === item.name?.toLowerCase() && e.status === 'undistributed'
+      );
+      const bankQty = inBank.reduce((s, e) => s + (e.totalQty || 0), 0);
+      const needed = item.qty || 1;
+      let stockStatus, stockColor;
+      if (bankQty >= needed) { stockStatus = 'IN STOCK'; stockColor = 'var(--green)'; }
+      else if (bankQty > 0)  { stockStatus = `PARTIAL (${bankQty}/${needed})`; stockColor = 'var(--orange)'; }
+      else                   { stockStatus = 'NEEDS SOURCING'; stockColor = 'var(--red)'; }
+      return { ...item, bankQty, needed, stockStatus, stockColor };
+    });
+
+    const canApprove = isApprover && r.status === 'pending';
+    const canFulfill = isApprover && r.status === 'approved';
+    const isOwn = r.submittedBy === myUsername;
+
+    return `<div class="card" style="margin-bottom:14px">
+      <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:12px;flex-wrap:wrap">
+        <div style="flex:1">
+          <div style="font-family:'Orbitron',sans-serif;font-size:13px;margin-bottom:6px">${r.title}</div>
+          <div style="font-size:10px;color:var(--text2)">
+            From: <strong style="color:var(--text)">${r.submittedBy}</strong>
+            · ${tsToDate(r.submittedAt)}
+            ${r.approvedBy ? ` · ${r.status === 'denied' ? 'Denied' : 'Approved'} by ${r.approvedBy}` : ''}
+          </div>
+          ${r.notes ? `<div style="font-size:11px;color:var(--text2);margin-top:6px">${r.notes}</div>` : ''}
+          ${r.reviewNotes ? `<div style="font-size:11px;color:var(--accent);margin-top:6px;font-style:italic">"${r.reviewNotes}"</div>` : ''}
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          ${priorityBadge(r.priority)}
+          ${reqStatusBadge(r.status)}
+          ${canApprove ? `
+            <button class="btn sm green" onclick="reviewReq('${id}', 'approved')">Approve</button>
+            <button class="btn sm red" onclick="reviewReq('${id}', 'denied')">Deny</button>` : ''}
+          ${canFulfill ? `<button class="btn sm" style="border-color:var(--accent);color:var(--accent)" onclick="fulfillReq('${id}')">Mark Fulfilled</button>` : ''}
+          ${(isOwn && r.status === 'pending') ? `<button class="btn sm red" onclick="deleteReq('${id}')">×</button>` : ''}
+        </div>
+      </div>
+      <div style="overflow-x:auto">
+        <table class="tbl">
+          <thead><tr><th>Item</th><th>Qty Needed</th><th>In Org Bank</th><th>Status</th></tr></thead>
+          <tbody>${bankCheck.map(item => `<tr>
+            <td style="font-weight:600">${item.name}</td>
+            <td>${item.needed}</td>
+            <td style="color:var(--text2)">${item.bankQty}</td>
+            <td><span class="tag" style="background:${item.stockColor}22;border:1px solid ${item.stockColor}44;color:${item.stockColor}">${item.stockStatus}</span></td>
+          </tr>`).join('')}</tbody>
+        </table>
+      </div>
+      ${r.status === 'pending' || r.status === 'approved' ? `
+        <div style="margin-top:12px">
+          <button class="btn sm" style="border-color:var(--purple);color:var(--purple)" onclick="showSourcingPanel('${id}')">
+            🔍 Find Sourcing Locations
+          </button>
+        </div>
+        <div id="sourcing_${id}" style="display:none;margin-top:12px"></div>` : ''}
+    </div>`;
+  }).join('');
+};
+
+window.showNewReqModal = function() {
+  window._reqItems = [];
+  document.getElementById('modalTitle').textContent = 'NEW REQUISITION';
+  document.getElementById('modalBody').innerHTML = `
+    <div class="field"><label>Title / Purpose</label><input type="text" id="req-title" placeholder="Alpha Squadron loadout restock..."></div>
+    <div class="grid2">
+      <div class="field"><label>Priority</label>
+        <select id="req-priority">
+          <option>Low</option><option selected>Standard</option><option>Urgent</option>
+        </select>
+      </div>
+      <div class="field"><label>Requested By</label>
+        <input type="text" id="req-requester" value="${window._session?.username}" readonly style="opacity:0.6">
+      </div>
+    </div>
+    <div class="field"><label>Notes (optional)</label>
+      <textarea id="req-notes" style="min-height:50px" placeholder="Context for this request..."></textarea>
+    </div>
+    <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
+      <div style="font-size:9px;letter-spacing:2px;color:var(--text2);text-transform:uppercase;margin-bottom:10px">Shopping List</div>
+      <div style="display:flex;gap:8px;margin-bottom:10px">
+        <input type="text" id="req-item-search" placeholder="Search items or commodities..." oninput="reqItemSearch()" style="flex:1">
+        <div style="font-size:10px;color:var(--text2);align-self:center;white-space:nowrap" id="req-search-status"></div>
+      </div>
+      <div id="req-search-results" style="max-height:180px;overflow-y:auto;margin-bottom:12px"></div>
+      <div id="req-item-list"></div>
+    </div>
+    <div class="btn-row" style="margin-top:16px">
+      <button class="btn" style="border-color:var(--purple);color:var(--purple)" onclick="submitReq()">Submit Requisition</button>
+    </div>
+  `;
+  document.getElementById('modalOverlay').style.display = 'flex';
+  renderReqItemList();
+};
+
+let _reqSearchTimeout = null;
+window.reqItemSearch = async function() {
+  const q = document.getElementById('req-item-search')?.value.trim();
+  const statusEl = document.getElementById('req-search-status');
+  const resultsEl = document.getElementById('req-search-results');
+  if (!q || q.length < 2) { resultsEl.innerHTML = ''; return; }
+
+  clearTimeout(_reqSearchTimeout);
+  _reqSearchTimeout = setTimeout(async () => {
+    statusEl.textContent = 'Searching UEX...';
+    try {
+      const results = await searchUexItems(q);
+      statusEl.textContent = results.length + ' results';
+      if (!results.length) { resultsEl.innerHTML = '<div style="font-size:11px;color:var(--text3);padding:8px">No results found.</div>'; return; }
+      resultsEl.innerHTML = results.map((item, i) => `
+        <div style="display:flex;align-items:center;gap:10px;padding:7px 10px;border-bottom:1px solid var(--border);cursor:pointer;transition:background 0.15s"
+          onmouseover="this.style.background='rgba(160,96,255,0.06)'" onmouseout="this.style.background=''"
+          onclick="addReqItem(${JSON.stringify(JSON.stringify(item))})">
+          <div style="flex:1">
+            <div style="font-size:12px">${item.name}</div>
+            <div style="font-size:10px;color:var(--text2)">${item._type === 'commodity' ? 'Commodity' : (item.category_name || 'Item')}</div>
+          </div>
+          <button class="btn sm" style="border-color:var(--purple);color:var(--purple);pointer-events:none">+</button>
+        </div>`).join('');
+    } catch(e) {
+      statusEl.textContent = '';
+      resultsEl.innerHTML = `<div style="font-size:11px;color:var(--red);padding:8px">Error: ${e.message}</div>`;
+    }
+  }, 350);
+};
+
+window.addReqItem = function(itemJson) {
+  const item = JSON.parse(itemJson);
+  // Don't add duplicates
+  if (window._reqItems.find(i => i.id === item.id && i._type === item._type)) return;
+  window._reqItems.push({ id: item.id, name: item.name, category: item.category_name || item._type, _type: item._type, qty: 1 });
+  document.getElementById('req-search-results').innerHTML = '';
+  document.getElementById('req-item-search').value = '';
+  document.getElementById('req-search-status').textContent = '';
+  renderReqItemList();
+};
+
+window.removeReqItem = function(i) {
+  window._reqItems.splice(i, 1);
+  renderReqItemList();
+};
+
+window.updateReqItemQty = function(i, val) {
+  window._reqItems[i].qty = parseInt(val) || 1;
+};
+
+function renderReqItemList() {
+  const el = document.getElementById('req-item-list');
+  if (!el) return;
+  if (!window._reqItems.length) { el.innerHTML = '<div style="font-size:11px;color:var(--text3);padding:8px 0">No items added yet. Search above.</div>'; return; }
+  el.innerHTML = `<table class="tbl"><thead><tr><th>Item</th><th>Type</th><th>Qty</th><th></th></tr></thead><tbody>` +
+    window._reqItems.map((item, i) => `<tr>
+      <td style="font-weight:600">${item.name}</td>
+      <td style="color:var(--text2);font-size:11px">${item.category}</td>
+      <td><input type="number" value="${item.qty}" min="1" step="1" onchange="updateReqItemQty(${i}, this.value)" style="width:70px;padding:4px 8px"></td>
+      <td><button class="btn sm red" onclick="removeReqItem(${i})">×</button></td>
+    </tr>`).join('') + '</tbody></table>';
+}
+
+window.submitReq = async function() {
+  const title = document.getElementById('req-title')?.value.trim();
+  const priority = document.getElementById('req-priority')?.value;
+  const notes = document.getElementById('req-notes')?.value.trim();
+  if (!title) { alert('Add a title for this requisition.'); return; }
+  if (!window._reqItems.length) { alert('Add at least one item to the shopping list.'); return; }
+
+  await push(ref(db, 'requisitions'), {
+    title, priority, notes,
+    submittedBy: window._session.username,
+    submittedAt: Date.now(),
+    status: 'pending',
+    items: window._reqItems.map(i => ({ id: i.id, name: i.name, category: i.category, type: i._type, qty: i.qty }))
+  });
+  closeModalDirect();
+  renderReqs();
+};
+
+window.reviewReq = function(id, decision) {
+  document.getElementById('modalTitle').textContent = decision === 'approved' ? 'APPROVE REQUISITION' : 'DENY REQUISITION';
+  document.getElementById('modalBody').innerHTML = `
+    <div class="field"><label>Notes for Requester (optional)</label>
+      <textarea id="review-notes" style="min-height:60px" placeholder="${decision === 'approved' ? 'Approved, will source by...' : 'Reason for denial...'}"></textarea>
+    </div>
+    <div class="btn-row">
+      <button class="btn ${decision === 'approved' ? 'green' : 'red'}" onclick="confirmReview('${id}', '${decision}')">
+        Confirm ${decision === 'approved' ? 'Approval' : 'Denial'}
+      </button>
+    </div>
+  `;
+  document.getElementById('modalOverlay').style.display = 'flex';
+};
+
+window.confirmReview = async function(id, decision) {
+  const notes = document.getElementById('review-notes')?.value.trim();
+  await update(ref(db, 'requisitions/' + id), {
+    status: decision,
+    approvedBy: window._session.username,
+    reviewedAt: Date.now(),
+    reviewNotes: notes || ''
+  });
+  closeModalDirect();
+  renderReqs();
+};
+
+window.fulfillReq = async function(id) {
+  if (!confirm('Mark this requisition as fulfilled?')) return;
+  await update(ref(db, 'requisitions/' + id), {
+    status: 'fulfilled',
+    fulfilledBy: window._session.username,
+    fulfilledAt: Date.now()
+  });
+  renderReqs();
+};
+
+window.deleteReq = async function(id) {
+  if (!confirm('Delete this requisition?')) return;
+  await remove(ref(db, 'requisitions/' + id));
+  renderReqs();
+};
+
+window.showSourcingPanel = async function(reqId) {
+  const panelEl = document.getElementById('sourcing_' + reqId);
+  if (!panelEl) return;
+  if (panelEl.style.display !== 'none') { panelEl.style.display = 'none'; return; }
+
+  panelEl.style.display = '';
+  panelEl.innerHTML = '<div style="font-size:11px;color:var(--text2);padding:8px 0">Loading sourcing data from UEX...</div>';
+
+  const req = window._reqsData[reqId];
+  if (!req?.items?.length) { panelEl.innerHTML = '<div style="font-size:11px;color:var(--text3)">No items to source.</div>'; return; }
+
+  // Only fetch for items that need sourcing
+  const needsSourcing = req.items.filter(item => {
+    const bankQty = Object.values(window._orgBankData)
+      .filter(e => e.materialName?.toLowerCase() === item.name?.toLowerCase() && e.status === 'undistributed')
+      .reduce((s, e) => s + (e.totalQty || 0), 0);
+    return bankQty < item.qty;
+  });
+
+  if (!needsSourcing.length) {
+    panelEl.innerHTML = '<div class="notice success" style="margin:0">✓ All items are in stock in the Org Bank.</div>';
+    return;
+  }
+
+  try {
+    const priceMap = {};
+    for (const item of needsSourcing) {
+      const prices = await getItemPrices(item.id, item.type);
+      if (prices.length) priceMap[item.name] = prices;
+    }
+
+    const clusters = clusterByLocation(priceMap);
+    const unclustered = needsSourcing.filter(item => !priceMap[item.name]?.length);
+
+    panelEl.innerHTML = `
+      <div style="font-size:9px;letter-spacing:2px;color:var(--purple);text-transform:uppercase;margin-bottom:10px">Sourcing Plan — Best Stop Coverage</div>
+      ${clusters.length ? clusters.map((c, i) => `
+        <div style="background:var(--panel2);border:1px solid var(--border);padding:12px 14px;margin-bottom:8px">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+            <span style="font-family:'Orbitron',sans-serif;font-size:11px;color:var(--purple)">#${i+1} ${c.terminal}</span>
+            <span class="tag" style="background:var(--purple-dim);border:1px solid rgba(160,96,255,0.3);color:var(--purple)">${c.count} item${c.count!==1?'s':''}</span>
+            <span style="font-size:10px;color:var(--text2)">${c.items[0]?.location || ''}</span>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px">
+            ${c.items.map(item => `<span class="tag" style="background:var(--accent-dim);border:1px solid rgba(0,200,240,0.2);color:var(--accent)">${item.itemName} · ${item.price?.toLocaleString() || '?'} aUEC</span>`).join('')}
+          </div>
+        </div>`).join('') : '<div style="font-size:11px;color:var(--text3);padding:8px 0">No buy locations found in UEX for these items.</div>'}
+      ${unclustered.length ? `<div class="notice warn" style="margin-top:8px">No buy data found for: ${unclustered.map(i=>i.name).join(', ')}</div>` : ''}
+    `;
+  } catch(e) {
+    panelEl.innerHTML = `<div class="notice error" style="margin:0">Failed to load UEX data: ${e.message}</div>`;
+  }
 };
 
 // ── Admin ──
@@ -1529,6 +2188,10 @@ window.renderAdmin = function() {
       <input type="text" id="code-${key}" value="${codes[key] || ''}" style="letter-spacing:2px">
     </div>`).join('');
 
+  // UEX token
+  const tokenInput = document.getElementById('uex-token-input');
+  if (tokenInput && window._uexToken) tokenInput.value = window._uexToken;
+
   // Revoke list
   document.getElementById('adminRevokeList').innerHTML = members.map(([id, m]) =>
     m.username === window._session.username ? '' : `
@@ -1547,6 +2210,21 @@ window.saveInviteCodes = async function() {
   await set(ref(db, 'config/invite_codes'), newCodes);
   window._currentCodes = newCodes;
   alert('Invite codes saved.');
+};
+
+window.saveUexToken = async function() {
+  const token = document.getElementById('uex-token-input')?.value.trim();
+  if (!token) { alert('Paste your UEX token first.'); return; }
+  await set(ref(db, 'config/uex_token'), token);
+  window._uexToken = token;
+  window._uexItemCache = null;
+  window._uexCommodityCache = null;
+  alert('UEX token saved. Cache cleared.');
+};
+
+window.toggleUexTokenVisibility = function() {
+  const el = document.getElementById('uex-token-input');
+  if (el) el.type = el.type === 'password' ? 'text' : 'password';
 };
 
 window.revokeMember = async function(id, username) {
