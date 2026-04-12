@@ -803,51 +803,80 @@ function can(action) {
 }
 
 // ── Login ──
+function setLoginStatus(msg, color) {
+  const err = document.getElementById('loginErr');
+  err.style.display = '';
+  err.style.color = color || 'var(--red)';
+  err.textContent = msg;
+}
+
+function withTimeout(promise, ms) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms))
+  ]);
+}
+
 window.doLogin = async function() {
   const username = document.getElementById('loginUsername').value.trim();
   const code = document.getElementById('loginCode').value.trim().toUpperCase();
-  const err = document.getElementById('loginErr');
-  err.style.display = 'none';
+  document.getElementById('loginErr').style.display = 'none';
 
-  if (!username || !code) { err.style.display = ''; err.textContent = 'Enter your Discord username and invite code.'; return; }
+  if (!username || !code) { setLoginStatus('Enter your Discord username and invite code.'); return; }
 
-  // Load codes from Firebase (fall back to defaults)
+  setLoginStatus('Connecting...', 'var(--accent)');
+
+  // Check invite code - try Firebase first, fall back to defaults
   let codes = { ...DEFAULT_CODES };
   try {
-    const snap = await get(ref(db, 'config/invite_codes'));
+    const snap = await withTimeout(get(ref(db, 'config/invite_codes')), 5000);
     if (snap.exists()) codes = snap.val();
-  } catch(e) {}
+  } catch(e) {
+    console.warn('Using default codes:', e.message);
+  }
 
   let role = null;
   for (const [r, c] of Object.entries(codes)) {
     if (c === code) { role = r; break; }
   }
 
-  if (!role) { err.style.display = ''; return; }
+  if (!role) { setLoginStatus('Invalid invite code. Check with CLD Leadership.'); return; }
 
-  // Register / update member
-  const membersSnap = await get(ref(db, 'members'));
+  setLoginStatus('Authenticating...', 'var(--accent)');
+
   let memberId = null;
-  if (membersSnap.exists()) {
-    const members = membersSnap.val();
-    for (const [id, m] of Object.entries(members)) {
-      if (m.username === username) { memberId = id; break; }
+  try {
+    const membersSnap = await withTimeout(get(ref(db, 'members')), 8000);
+    if (membersSnap.exists()) {
+      const members = membersSnap.val();
+      for (const [id, m] of Object.entries(members)) {
+        if (m.username === username) { memberId = id; break; }
+      }
     }
+  } catch(e) { console.warn('Members fetch failed:', e.message); }
+
+  try {
+    if (!memberId) {
+      const newRef = push(ref(db, 'members'));
+      memberId = newRef.key;
+      await withTimeout(set(newRef, { username, role, joinedAt: Date.now(), lastSeen: Date.now() }), 8000);
+    } else {
+      await withTimeout(update(ref(db, 'members/' + memberId), { role, lastSeen: Date.now() }), 8000);
+    }
+  } catch(e) {
+    console.warn('Member write failed:', e.message);
+    if (!memberId) memberId = 'local_' + Date.now();
   }
 
-  if (!memberId) {
-    const newRef = push(ref(db, 'members'));
-    memberId = newRef.key;
-    await set(newRef, { username, role, joinedAt: Date.now(), lastSeen: Date.now() });
-  } else {
-    await update(ref(db, `members/${memberId}`), { role, lastSeen: Date.now() });
-  }
-
+  setLoginStatus('Success! Loading...', 'var(--green)');
   window._session = { username, role, memberId };
-  document.getElementById('loginScreen').style.display = 'none';
-  document.getElementById('app').style.display = '';
-  setupUI();
-  loadAll();
+
+  setTimeout(() => {
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    setupUI();
+    loadAll();
+  }, 500);
 };
 
 window.doLogout = function() {
