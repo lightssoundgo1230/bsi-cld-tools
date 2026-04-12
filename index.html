@@ -1231,6 +1231,8 @@ window.submitAccessRequest = async function() {
 
   await push(ref(db, 'access_requests'), { username, note, status: 'pending', submittedAt: Date.now() });
   localStorage.setItem('tbsi_pending_username', username);
+  document.getElementById('reqUsername').value = '';
+  document.getElementById('reqNote').value = '';
   showPanel('pending');
   document.getElementById('pendingStatus').textContent = 'Request submitted. Leadership will review shortly.';
 };
