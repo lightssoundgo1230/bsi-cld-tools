@@ -395,26 +395,88 @@ label { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: 
      LOGIN SCREEN
 ══════════════════════════════════════════ -->
 <div id="loginScreen">
-  <div class="login-box">
+
+  <!-- Panel: Login -->
+  <div class="login-box" id="panel-login">
     <div class="login-logo">TBSI</div>
     <div class="login-sub">Commerce &amp; Logistics Division</div>
-    <div class="login-err" id="loginErr">Invalid credentials. Check your invite code.</div>
+    <div class="login-err" id="loginErr"></div>
     <div class="field">
       <label>Discord Username</label>
       <input type="text" id="loginUsername" placeholder="YourUsername" autocomplete="off">
     </div>
     <div class="field">
-      <label>Invite Code</label>
-      <input type="text" id="loginCode" placeholder="XXXX-XXXX-XXXX" autocomplete="off" style="letter-spacing:2px">
+      <label>Password</label>
+      <input type="password" id="loginPassword" placeholder="••••••••" autocomplete="current-password">
     </div>
     <div class="btn-row">
-      <button class="btn" onclick="doLogin()" style="flex:1">Authenticate</button>
+      <button class="btn" onclick="doLogin()" style="flex:1">Sign In</button>
     </div>
-    <div style="margin-top:16px;font-size:10px;color:var(--text3);line-height:1.6">
-      Contact CLD Leadership for your invite code.<br>
-      Unauthorized access is logged.
+    <div style="margin-top:16px;text-align:center">
+      <button onclick="showPanel('request')" style="background:none;border:none;color:var(--text2);font-family:'Share Tech Mono',monospace;font-size:10px;cursor:pointer;letter-spacing:1px;text-decoration:underline">
+        Request Access
+      </button>
     </div>
   </div>
+
+  <!-- Panel: Change Password (first login) -->
+  <div class="login-box" id="panel-changepass" style="display:none">
+    <div class="login-logo">TBSI</div>
+    <div class="login-sub" style="margin-bottom:20px">Set Your Password</div>
+    <div class="notice warn" style="margin-bottom:16px;font-size:11px">Your account was approved with a temporary password. Please set a new one before continuing.</div>
+    <div class="login-err" id="changepassErr"></div>
+    <div class="field">
+      <label>New Password</label>
+      <input type="password" id="newPassword" placeholder="At least 8 characters" autocomplete="new-password">
+    </div>
+    <div class="field">
+      <label>Confirm Password</label>
+      <input type="password" id="confirmPassword" placeholder="Repeat password" autocomplete="new-password">
+    </div>
+    <div class="btn-row">
+      <button class="btn green" onclick="doChangePassword()" style="flex:1">Set Password &amp; Enter</button>
+    </div>
+  </div>
+
+  <!-- Panel: Request Access -->
+  <div class="login-box" id="panel-request" style="display:none">
+    <div class="login-logo">TBSI</div>
+    <div class="login-sub" style="margin-bottom:20px">Request Access</div>
+    <div class="login-err" id="requestErr"></div>
+    <div class="field">
+      <label>Discord Username</label>
+      <input type="text" id="reqUsername" placeholder="YourDiscordUsername" autocomplete="off">
+    </div>
+    <div class="field">
+      <label>Note to Leadership (optional)</label>
+      <textarea id="reqNote" placeholder="e.g. I'm in TBSI, Ark sent me..." style="min-height:60px;resize:none"></textarea>
+    </div>
+    <div class="btn-row">
+      <button class="btn orange" onclick="submitAccessRequest()" style="flex:1">Submit Request</button>
+    </div>
+    <div style="margin-top:12px;text-align:center">
+      <button onclick="showPanel('login')" style="background:none;border:none;color:var(--text2);font-family:'Share Tech Mono',monospace;font-size:10px;cursor:pointer;letter-spacing:1px;text-decoration:underline">
+        ← Back to Sign In
+      </button>
+    </div>
+  </div>
+
+  <!-- Panel: Request Pending -->
+  <div class="login-box" id="panel-pending" style="display:none">
+    <div class="login-logo">TBSI</div>
+    <div class="login-sub" style="margin-bottom:20px">Request Pending</div>
+    <div class="notice info" style="margin-bottom:16px;font-size:11px">Your access request has been submitted. CLD Leadership will review it shortly. Check back here to see if you've been approved.</div>
+    <div id="pendingStatus" style="font-size:12px;color:var(--text2);margin-bottom:16px"></div>
+    <div class="btn-row">
+      <button class="btn" onclick="checkRequestStatus()" style="flex:1">Check Status</button>
+    </div>
+    <div style="margin-top:12px;text-align:center">
+      <button onclick="showPanel('login')" style="background:none;border:none;color:var(--text2);font-family:'Share Tech Mono',monospace;font-size:10px;cursor:pointer;letter-spacing:1px;text-decoration:underline">
+        ← Back to Sign In
+      </button>
+    </div>
+  </div>
+
 </div>
 
 <!-- ══════════════════════════════════════════
@@ -795,17 +857,23 @@ label { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: 
   <!-- ADMIN (CLD Leadership only) -->
   <div class="page" id="page-admin">
     <div class="section-title"><div class="dot" style="background:var(--red)"></div> Admin Panel</div>
+
+    <!-- Pending Access Requests -->
+    <div id="adminRequestsSection" style="margin-bottom:24px">
+      <div class="section-title" style="font-size:9px"><div class="dot" style="background:var(--orange)"></div> Pending Access Requests</div>
+      <div id="adminRequests"><div class="empty">No pending requests.</div></div>
+    </div>
+
     <div class="grid2">
       <div>
         <div class="section-title" style="font-size:9px"><div class="dot" style="background:var(--accent)"></div> Enrolled Members</div>
         <div id="adminMembers"><div class="empty">Loading...</div></div>
       </div>
       <div>
-        <div class="section-title" style="font-size:9px"><div class="dot" style="background:var(--orange)"></div> Invite Codes</div>
+        <div class="section-title" style="font-size:9px"><div class="dot" style="background:var(--orange)"></div> Member Password Reset</div>
         <div class="card">
-          <div class="notice warn" style="margin-bottom:16px">Keep these confidential. Changing a code immediately invalidates the old one.</div>
-          <div id="adminCodes"><div class="empty">Loading...</div></div>
-          <div class="btn-row"><button class="btn orange" onclick="saveInviteCodes()">Save Codes</button></div>
+          <div style="font-size:11px;color:var(--text2);margin-bottom:12px">Reset a member's password. They will be prompted to set a new one on next login.</div>
+          <div id="adminResetList"></div>
         </div>
       </div>
     </div>
@@ -858,14 +926,10 @@ const firebaseConfig = {
 const fbApp = initializeApp(firebaseConfig);
 const db = getDatabase(fbApp);
 
-// ── Default invite codes (stored in Firebase, overridable by admin) ──
-const DEFAULT_CODES = {
-  member:               'YL7I-H7W4-7D5L',
-  event_organizer:      '0XKZ-YQ34-LIKL',
-  general_leadership:   'N8F7-0G8B-I5SX',
-  cld_leadership:       'L4KR-TD36-2254',
-  director_of_commerce: 'R782-P4AZ-OAZ4'
-};
+// ── Bootstrap emergency access (hardcoded, not stored in Firebase) ──
+// This bypasses normal auth and grants CLD Leadership. Keep private.
+const BOOTSTRAP_CODE = 'tTwHUAGHHqFTzSQRdQnzXpTI';
+const BOOTSTRAP_ROLE = 'cld_leadership';
 
 const ROLE_LABELS = {
   member: 'Member',
@@ -900,7 +964,6 @@ window._membersData = {};
 window._eventsData = {};
 window._donationsData = {};
 window._distLogData = {};
-window._currentCodes = { ...DEFAULT_CODES };
 window._reqsData = {};
 window._uexToken = '';
 window._blueprintData = null;   // { version, blueprints[], resources[], items[], properties{} }
@@ -977,95 +1040,212 @@ function can(action) {
   return false;
 }
 
-// ── Login ──
-function setLoginStatus(msg, color) {
-  const err = document.getElementById('loginErr');
-  err.style.display = '';
-  err.style.color = color || 'var(--red)';
-  err.textContent = msg;
-}
-
+// ── Auth Helpers ──
 function withTimeout(promise, ms) {
-  return Promise.race([
-    promise,
-    new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms))
-  ]);
+  return Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms))]);
 }
 
+async function hashPassword(password) {
+  const enc = new TextEncoder();
+  const data = enc.encode(password + 'tbsi_cld_salt_2024');
+  const hashBuf = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(hashBuf)).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
+function genTempPassword(length=12) {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+  return Array.from(crypto.getRandomValues(new Uint8Array(length))).map(b => chars[b % chars.length]).join('');
+}
+
+function showPanel(name) {
+  ['login','changepass','request','pending'].forEach(p => {
+    const el = document.getElementById('panel-' + p);
+    if (el) el.style.display = p === name ? '' : 'none';
+  });
+  ['loginErr','changepassErr','requestErr'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.style.display = 'none'; el.textContent = ''; }
+  });
+}
+
+function setMsg(elId, msg, color) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  el.style.display = msg ? '' : 'none';
+  el.style.color = color || 'var(--red)';
+  el.textContent = msg;
+}
+
+window._pendingAuthSession = null;
+
+// ── Login ──
 window.doLogin = async function() {
   const username = document.getElementById('loginUsername').value.trim();
-  const code = document.getElementById('loginCode').value.trim().toUpperCase();
-  document.getElementById('loginErr').style.display = 'none';
+  const password = document.getElementById('loginPassword').value;
+  setMsg('loginErr', '');
+  if (!username || !password) { setMsg('loginErr', 'Enter your username and password.'); return; }
+  setMsg('loginErr', 'Connecting...', 'var(--accent)');
 
-  if (!username || !code) { setLoginStatus('Enter your Discord username and invite code.'); return; }
-
-  setLoginStatus('Connecting...', 'var(--accent)');
-
-  // Check invite code - try Firebase first, fall back to defaults
-  let codes = { ...DEFAULT_CODES };
-  try {
-    const snap = await withTimeout(get(ref(db, 'config/invite_codes')), 5000);
-    if (snap.exists()) codes = snap.val();
-  } catch(e) {
-    console.warn('Using default codes:', e.message);
+  // Bootstrap emergency access
+  if (password === BOOTSTRAP_CODE) {
+    await completeLogin(username, BOOTSTRAP_ROLE, null, false);
+    return;
   }
 
-  let role = null;
-  for (const [r, c] of Object.entries(codes)) {
-    if (c === code) { role = r; break; }
-  }
-
-  if (!role) { setLoginStatus('Invalid invite code. Check with CLD Leadership.'); return; }
-
-  setLoginStatus('Authenticating...', 'var(--accent)');
-
-  let memberId = null;
+  let member = null, memberId = null;
   try {
-    const membersSnap = await withTimeout(get(ref(db, 'members')), 8000);
-    if (membersSnap.exists()) {
-      const members = membersSnap.val();
-      for (const [id, m] of Object.entries(members)) {
-        if (m.username === username) { memberId = id; break; }
+    const snap = await withTimeout(get(ref(db, 'members')), 8000);
+    if (snap.exists()) {
+      for (const [id, m] of Object.entries(snap.val())) {
+        if (m.username === username) { member = m; memberId = id; break; }
       }
     }
-  } catch(e) { console.warn('Members fetch failed:', e.message); }
+  } catch(e) { setMsg('loginErr', 'Connection error. Try again.'); return; }
 
-  try {
+  if (!member) { setMsg('loginErr', 'Username not found. Request access below.'); return; }
+  if (!member.passwordHash) { setMsg('loginErr', 'Account not yet set up. Contact leadership.'); return; }
+
+  const hash = await hashPassword(password);
+  if (hash !== member.passwordHash) { setMsg('loginErr', 'Incorrect password.'); return; }
+
+  if (member.mustChangePassword) {
+    window._pendingAuthSession = { username, role: member.role, memberId };
+    showPanel('changepass');
+    return;
+  }
+  await completeLogin(username, member.role, memberId, true);
+};
+
+window.doChangePassword = async function() {
+  const newPass = document.getElementById('newPassword').value;
+  const confirm = document.getElementById('confirmPassword').value;
+  setMsg('changepassErr', '');
+  if (!newPass || newPass.length < 8) { setMsg('changepassErr', 'Password must be at least 8 characters.'); return; }
+  if (newPass !== confirm) { setMsg('changepassErr', 'Passwords do not match.'); return; }
+  if (newPass === BOOTSTRAP_CODE) { setMsg('changepassErr', 'Cannot use that as a password.'); return; }
+
+  const s = window._pendingAuthSession;
+  if (!s) { showPanel('login'); return; }
+
+  setMsg('changepassErr', 'Saving...', 'var(--accent)');
+  const hash = await hashPassword(newPass);
+  await update(ref(db, 'members/' + s.memberId), { passwordHash: hash, mustChangePassword: false, lastSeen: Date.now() });
+  window._pendingAuthSession = null;
+  await completeLogin(s.username, s.role, s.memberId, false);
+};
+
+async function completeLogin(username, role, memberId, updateLastSeen) {
+  if (!memberId) {
+    try {
+      const snap = await withTimeout(get(ref(db, 'members')), 5000);
+      if (snap?.exists()) {
+        for (const [id, m] of Object.entries(snap.val())) {
+          if (m.username === username) { memberId = id; break; }
+        }
+      }
+    } catch(e) {}
     if (!memberId) {
       const newRef = push(ref(db, 'members'));
       memberId = newRef.key;
-      await withTimeout(set(newRef, { username, role, joinedAt: Date.now(), lastSeen: Date.now() }), 8000);
-    } else {
-      await withTimeout(update(ref(db, 'members/' + memberId), { role, lastSeen: Date.now() }), 8000);
+      await set(newRef, { username, role, joinedAt: Date.now(), lastSeen: Date.now(), mustChangePassword: true });
     }
-  } catch(e) {
-    console.warn('Member write failed:', e.message);
-    if (!memberId) memberId = 'local_' + Date.now();
   }
-
-  setLoginStatus('Success! Loading...', 'var(--green)');
+  if (updateLastSeen) await update(ref(db, 'members/' + memberId), { lastSeen: Date.now() }).catch(() => {});
+  setMsg('loginErr', 'Access granted. Loading...', 'var(--green)');
   window._session = { username, role, memberId };
-
   setTimeout(() => {
     document.getElementById('loginScreen').style.display = 'none';
     document.getElementById('app').style.display = 'block';
     setupUI();
     loadAll();
     loadPersonalInvCache();
-  }, 500);
-};
+  }, 400);
+}
 
 window.doLogout = function() {
   window._session = null;
+  window._pendingAuthSession = null;
   document.getElementById('loginScreen').style.display = 'flex';
   document.getElementById('app').style.display = 'none';
-  document.getElementById('loginCode').value = '';
+  showPanel('login');
   document.getElementById('loginUsername').value = '';
-  document.getElementById('loginErr').style.display = 'none';
+  document.getElementById('loginPassword').value = '';
 };
 
-// Enter key on login
-document.getElementById('loginCode').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+// ── Access Requests ──
+window.submitAccessRequest = async function() {
+  const username = document.getElementById('reqUsername').value.trim();
+  const note = document.getElementById('reqNote').value.trim();
+  setMsg('requestErr', '');
+  if (!username) { setMsg('requestErr', 'Enter your Discord username.'); return; }
+  setMsg('requestErr', 'Submitting...', 'var(--accent)');
+
+  try {
+    const snap = await withTimeout(get(ref(db, 'members')), 5000);
+    if (snap?.exists()) {
+      for (const m of Object.values(snap.val())) {
+        if (m.username === username) { setMsg('requestErr', 'That username already has access. Try signing in.'); return; }
+      }
+    }
+  } catch(e) {}
+
+  try {
+    const snap = await withTimeout(get(ref(db, 'access_requests')), 5000);
+    if (snap?.exists()) {
+      for (const r of Object.values(snap.val())) {
+        if (r.username === username && r.status === 'pending') {
+          localStorage.setItem('tbsi_pending_username', username);
+          showPanel('pending');
+          document.getElementById('pendingStatus').textContent = 'Request already submitted ' + tsToDate(r.submittedAt) + '. Awaiting review.';
+          return;
+        }
+      }
+    }
+  } catch(e) {}
+
+  await push(ref(db, 'access_requests'), { username, note, status: 'pending', submittedAt: Date.now() });
+  localStorage.setItem('tbsi_pending_username', username);
+  showPanel('pending');
+  document.getElementById('pendingStatus').textContent = 'Request submitted. Leadership will review shortly.';
+};
+
+window.checkRequestStatus = async function() {
+  const username = localStorage.getItem('tbsi_pending_username');
+  if (!username) { showPanel('request'); return; }
+  const el = document.getElementById('pendingStatus');
+  if (el) el.textContent = 'Checking...';
+  try {
+    const snap = await withTimeout(get(ref(db, 'access_requests')), 5000);
+    if (!snap?.exists()) { if (el) el.textContent = 'No request found.'; return; }
+    let found = null;
+    for (const r of Object.values(snap.val())) { if (r.username === username) found = r; }
+    if (!found) { if (el) el.textContent = 'No request found for ' + username + '.'; return; }
+    if (found.status === 'approved') {
+      localStorage.removeItem('tbsi_pending_username');
+      setMsg('loginErr', 'Approved! Sign in with the temporary password sent by leadership.', 'var(--green)');
+      document.getElementById('loginUsername').value = username;
+      showPanel('login');
+    } else if (found.status === 'denied') {
+      localStorage.removeItem('tbsi_pending_username');
+      if (el) el.textContent = 'Request not approved.' + (found.denyReason ? ' Reason: ' + found.denyReason : ' Contact leadership.');
+    } else {
+      if (el) el.textContent = 'Still pending. Submitted ' + tsToDate(found.submittedAt) + '. Check back soon.';
+    }
+  } catch(e) { if (el) el.textContent = 'Connection error. Try again.'; }
+};
+
+function updateRequestsBadge() {
+  const pending = Object.values(window._accessRequestsData || {}).filter(r => r.status === 'pending').length;
+  const tab = document.getElementById('tab-admin');
+  if (!tab) return;
+  if (pending > 0) {
+    tab.innerHTML = 'Admin <span style="background:var(--red);color:white;border-radius:10px;padding:1px 7px;font-size:9px;margin-left:4px">' + pending + '</span>';
+  } else { tab.textContent = 'Admin'; }
+}
+
+document.getElementById('loginPassword').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+document.getElementById('loginUsername').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('loginPassword')?.focus(); });
+
 
 // ── UI Setup based on role ──
 function setupUI() {
@@ -1131,8 +1311,10 @@ function loadAll() {
     window._distLogData = snap.val() || {};
     if (document.getElementById('ob-tab-dist') && document.getElementById('ob-tab-dist').style.display !== 'none') renderDistLog();
   });
-  onValue(ref(db, 'config/invite_codes'), snap => {
-    if (snap.exists()) window._currentCodes = snap.val();
+  onValue(ref(db, 'access_requests'), snap => {
+    window._accessRequestsData = snap.val() || {};
+    updateRequestsBadge();
+    if (document.getElementById('page-admin')?.classList.contains('active')) renderAdminRequests();
   });
   onValue(ref(db, 'requisitions'), snap => {
     window._reqsData = snap.val() || {};
@@ -2544,6 +2726,7 @@ function getPersonalInvQty(matName) {
 
 // Cache personal inventory for quick lookups
 window._personalInvCache = {};
+window._accessRequestsData = {};
 async function loadPersonalInvCache() {
   if (!window._session?.memberId) return;
   try {
@@ -2916,49 +3099,112 @@ window.refreshBlueprintData = async function() {
 window.renderAdmin = function() {// ── Admin ──
 window.renderAdmin = function() {
   if (!can('admin')) return;
+  renderAdminRequests();
 
   // Members list
   const members = Object.entries(window._membersData);
   const el = document.getElementById('adminMembers');
   if (!members.length) { el.innerHTML = '<div class="empty">No enrolled members.</div>'; }
-  else el.innerHTML = `<table class="tbl"><thead><tr><th>Username</th><th>Role</th><th>Joined</th><th>Last Seen</th></tr></thead><tbody>` +
+  else el.innerHTML = `<table class="tbl"><thead><tr><th>Username</th><th>Role</th><th>Joined</th><th>Last Seen</th><th></th></tr></thead><tbody>` +
     members.sort((a,b) => (b[1].lastSeen||0)-(a[1].lastSeen||0)).map(([id, m]) => `<tr>
       <td>${m.username}</td>
-      <td>${roleBadgeHtml(m.role)}</td>
+      <td>
+        <select onchange="updateMemberRole('${id}', this.value)" style="font-size:10px;padding:3px 6px;background:var(--bg2);width:auto">
+          ${Object.entries(ROLE_LABELS).map(([k,v]) => `<option value="${k}" ${m.role===k?'selected':''}>${v}</option>`).join('')}
+        </select>
+      </td>
       <td style="color:var(--text2)">${tsToDate(m.joinedAt)}</td>
       <td style="color:var(--text2)">${tsToDate(m.lastSeen)}</td>
+      <td style="display:flex;gap:6px">
+        <button class="btn sm orange" onclick="resetMemberPassword('${id}','${m.username}')">Reset PW</button>
+        ${m.username !== window._session?.username ? `<button class="btn sm red" onclick="revokeMember('${id}','${m.username}')">Revoke</button>` : ''}
+      </td>
     </tr>`).join('') + '</tbody></table>';
-
-  // Invite codes
-  const codes = window._currentCodes;
-  document.getElementById('adminCodes').innerHTML = Object.entries(ROLE_LABELS).map(([key, label]) => `
-    <div class="field">
-      <label>${label}</label>
-      <input type="text" id="code-${key}" value="${codes[key] || ''}" style="letter-spacing:2px">
-    </div>`).join('');
 
   // UEX token
   const tokenInput = document.getElementById('uex-token-input');
   if (tokenInput && window._uexToken) tokenInput.value = window._uexToken;
+};
 
-  // Revoke list
-  document.getElementById('adminRevokeList').innerHTML = members.map(([id, m]) =>
-    m.username === window._session.username ? '' : `
-    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
-      <span style="flex:1;font-size:12px">${m.username}</span>
-      ${roleBadgeHtml(m.role)}
-      <button class="btn sm red" onclick="revokeMember('${id}', '${m.username}')">Revoke Access</button>
+window.renderAdminRequests = function() {
+  if (!can('admin')) return;
+  const el = document.getElementById('adminRequests');
+  if (!el) return;
+  const pending = Object.entries(window._accessRequestsData || {}).filter(([,r]) => r.status === 'pending');
+  if (!pending.length) { el.innerHTML = '<div class="empty">No pending requests.</div>'; return; }
+
+  el.innerHTML = pending.map(([id, r]) => `
+    <div class="card" style="margin-bottom:10px">
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:600">${r.username}</div>
+          <div style="font-size:10px;color:var(--text2);margin-top:3px">${tsToDate(r.submittedAt)}${r.note ? ' · "' + r.note + '"' : ''}</div>
+        </div>
+        <select id="req-role-${id}" style="font-size:10px;padding:4px 8px;background:var(--bg2);width:auto">
+          ${Object.entries(ROLE_LABELS).map(([k,v]) => `<option value="${k}" ${k==='member'?'selected':''}>${v}</option>`).join('')}
+        </select>
+        <button class="btn sm green" onclick="approveRequest('${id}')">Approve</button>
+        <button class="btn sm red" onclick="denyRequest('${id}')">Deny</button>
+      </div>
     </div>`).join('');
 };
 
-window.saveInviteCodes = async function() {
-  const newCodes = {};
-  for (const key of Object.keys(ROLE_LABELS)) {
-    newCodes[key] = document.getElementById('code-' + key)?.value.trim().toUpperCase() || DEFAULT_CODES[key];
-  }
-  await set(ref(db, 'config/invite_codes'), newCodes);
-  window._currentCodes = newCodes;
-  alert('Invite codes saved.');
+window.approveRequest = async function(id) {
+  const r = window._accessRequestsData[id];
+  if (!r) return;
+  const roleEl = document.getElementById('req-role-' + id);
+  const role = roleEl?.value || 'member';
+
+  const tempPass = genTempPassword();
+  const hash = await hashPassword(tempPass);
+
+  const newRef = push(ref(db, 'members'));
+  await set(newRef, {
+    username: r.username, role,
+    joinedAt: Date.now(), lastSeen: Date.now(),
+    passwordHash: hash, mustChangePassword: true
+  });
+  await update(ref(db, 'access_requests/' + id), { status: 'approved', approvedBy: window._session.username, approvedAt: Date.now(), role });
+
+  // Show temp password to approver
+  document.getElementById('modalTitle').textContent = 'REQUEST APPROVED';
+  document.getElementById('modalBody').innerHTML = `
+    <div class="notice success" style="margin-bottom:16px">Account created for <strong>${r.username}</strong> as ${ROLE_LABELS[role]}.</div>
+    <div class="notice warn">
+      <div style="margin-bottom:8px">Send this temporary password to <strong>${r.username}</strong> via Discord:</div>
+      <div style="font-family:'Orbitron',sans-serif;font-size:18px;letter-spacing:3px;color:var(--gold);text-align:center;padding:12px;background:var(--bg);border:1px solid var(--border)">${tempPass}</div>
+      <div style="font-size:10px;margin-top:8px;color:var(--text2)">They will be required to change it on first login. Copy it now — it won't be shown again.</div>
+    </div>
+    <div class="btn-row"><button class="btn" onclick="navigator.clipboard.writeText('${tempPass}');this.textContent='Copied!'">Copy Password</button>
+    <button class="btn sm" onclick="closeModalDirect()">Done</button></div>`;
+  document.getElementById('modalOverlay').style.display = 'flex';
+};
+
+window.denyRequest = async function(id) {
+  const reason = prompt('Reason for denial (optional, will be shown to requester):') || '';
+  await update(ref(db, 'access_requests/' + id), { status: 'denied', deniedBy: window._session.username, deniedAt: Date.now(), denyReason: reason });
+};
+
+window.updateMemberRole = async function(id, role) {
+  await update(ref(db, 'members/' + id), { role });
+};
+
+window.resetMemberPassword = async function(id, username) {
+  if (!confirm('Reset password for ' + username + '? They will be required to set a new one on next login.')) return;
+  const tempPass = genTempPassword();
+  const hash = await hashPassword(tempPass);
+  await update(ref(db, 'members/' + id), { passwordHash: hash, mustChangePassword: true });
+
+  document.getElementById('modalTitle').textContent = 'PASSWORD RESET';
+  document.getElementById('modalBody').innerHTML = `
+    <div class="notice warn">
+      <div style="margin-bottom:8px">New temporary password for <strong>${username}</strong>:</div>
+      <div style="font-family:'Orbitron',sans-serif;font-size:18px;letter-spacing:3px;color:var(--gold);text-align:center;padding:12px;background:var(--bg);border:1px solid var(--border)">${tempPass}</div>
+      <div style="font-size:10px;margin-top:8px;color:var(--text2)">Send this via Discord. They must change it on next login.</div>
+    </div>
+    <div class="btn-row"><button class="btn" onclick="navigator.clipboard.writeText('${tempPass}');this.textContent='Copied!'">Copy Password</button>
+    <button class="btn sm" onclick="closeModalDirect()">Done</button></div>`;
+  document.getElementById('modalOverlay').style.display = 'flex';
 };
 
 window.saveUexToken = async function() {
@@ -2977,8 +3223,8 @@ window.toggleUexTokenVisibility = function() {
 };
 
 window.revokeMember = async function(id, username) {
-  if (!confirm(`Revoke access for ${username}? They will be unable to log in.`)) return;
-  await remove(ref(db, `members/${id}`));
+  if (!confirm('Revoke access for ' + username + '? They will be unable to log in.')) return;
+  await remove(ref(db, 'members/' + id));
 };
 
 // ── Modals ──
