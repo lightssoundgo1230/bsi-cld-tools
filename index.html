@@ -1058,8 +1058,10 @@ window.parseAttendance = function() {
     const durMatch = line.match(/DUR:(\d+:\d+:\d+|\d+:\d+)/);
     if (!durMatch) continue;
     const durStr = durMatch[1];
-    const beforeDur = line.substring(0, line.indexOf('|DUR:')).trim();
-    const parts = beforeDur.split('|');
+    // Handle both "| DUR:" and "|DUR:" (with or without spaces around pipes)
+    const durIdx = line.search(/\s*\|\s*DUR:/);
+    const beforeDur = durIdx !== -1 ? line.substring(0, durIdx).trim() : line;
+    const parts = beforeDur.split('|').map(p => p.trim()).filter(p => p);
     if (parts.length < 2) continue;
     const namePart = parts[0].trim();
     const username = parts[1].trim();
