@@ -1768,56 +1768,102 @@ window.rejectDonation = async function(id) {
 };
 
 // ── UEX API ──
-async function uexGet(endpoint) {
+async function uexGet(resource, params = {}) {
   const token = window._uexToken;
   if (!token) throw new Error('No UEX token configured. Ask CLD Leadership to add it in Admin.');
-  const res = await fetch(`https://api.uexcorp.space/2.0/${endpoint}`, {
-    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
+  const base = 'https://api.uexcorp.space/2.0/' + resource;
+  const qs = Object.keys(params).length
+    ? '?' + Object.entries(params).map(([k,v]) => `${k}=${encodeURIComponent(v)}`).join('&')
+    : '';
+  const res = await fetch(base + qs, {
+    headers: { 'Authorization': `Bearer ${token}` }
   });
-  if (!res.ok) throw new Error(`UEX API error: ${res.status}`);
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`UEX ${res.status}: ${body.substring(0,120)}`);
+  }
   const data = await res.json();
   return data.data || [];
 }
 
-// Cache UEX search results in memory to avoid hammering the API
+// Cache UEX data in memory
 window._uexItemCache = null;
 window._uexCommodityCache = null;
+window._uexCacheLoading = false;
+window._uexCacheReady = false;
 
-async function searchUexItems(query) {
-  if (!window._uexItemCache) {
-    const [items, commodities] = await Promise.all([
-      uexGet('items/'),
-      uexGet('commodities/')
-    ]);
-    window._uexItemCache = (items || []).map(i => ({ ...i, _type: 'item' }));
-    window._uexCommodityCache = (commodities || []).map(c => ({ ...c, _type: 'commodity' }));
+async function loadUexCatalog(statusCallback) {
+  if (window._uexCacheReady) return;
+  if (window._uexCacheLoading) {
+    // Wait for existing load
+    await new Promise(resolve => {
+      const check = setInterval(() => {
+        if (window._uexCacheReady) { clearInterval(check); resolve(); }
+      }, 200);
+    });
+    return;
   }
+  window._uexCacheLoading = true;
+  try {
+    // Fetch commodities (no params needed)
+    if (statusCallback) statusCallback('Loading commodities...');
+    const commodities = await uexGet('commodities');
+    window._uexCommodityCache = (commodities || []).map(c => ({ ...c, _type: 'commodity' }));
+
+    // Fetch categories, then items per category
+    if (statusCallback) statusCallback('Loading item categories...');
+    const categories = await uexGet('categories');
+    const allItems = [];
+    const catList = (categories || []).slice(0, 40); // cap to avoid quota burn
+    let done = 0;
+    for (const cat of catList) {
+      try {
+        if (statusCallback) statusCallback(`Loading items (${++done}/${catList.length})...`);
+        const items = await uexGet('items', { id_category: cat.id });
+        (items || []).forEach(i => allItems.push({ ...i, category_name: cat.name, _type: 'item' }));
+      } catch(e) { /* skip failed categories */ }
+    }
+    // Deduplicate by id
+    const seen = new Set();
+    window._uexItemCache = allItems.filter(i => {
+      if (seen.has(i.id)) return false;
+      seen.add(i.id); return true;
+    });
+    window._uexCacheReady = true;
+    if (statusCallback) statusCallback('ready');
+  } finally {
+    window._uexCacheLoading = false;
+  }
+}
+
+function searchUexCached(query) {
+  if (!window._uexCacheReady) return [];
   const q = query.toLowerCase();
-  const itemResults = window._uexItemCache.filter(i => i.name?.toLowerCase().includes(q)).slice(0, 15);
-  const commResults = window._uexCommodityCache.filter(c => c.name?.toLowerCase().includes(q)).slice(0, 10);
+  const itemResults = (window._uexItemCache || []).filter(i => i.name?.toLowerCase().includes(q)).slice(0, 20);
+  const commResults = (window._uexCommodityCache || []).filter(c => c.name?.toLowerCase().includes(q)).slice(0, 10);
   return [...itemResults, ...commResults];
 }
 
 async function getItemPrices(itemId, type) {
   try {
     if (type === 'commodity') {
-      const data = await uexGet(`commodities_prices/id_commodity/${itemId}/`);
+      const data = await uexGet('commodities_prices', { id_commodity: itemId });
       return (data || []).filter(p => p.price_buy > 0).map(p => ({
-        terminal: p.terminal_name || p.id_terminal,
-        location: p.star_system_name + ' › ' + (p.planet_name || p.space_station_name || p.outpost_name || ''),
+        terminal: p.terminal_name || String(p.id_terminal),
+        location: [p.star_system_name, p.planet_name || p.space_station_name || p.outpost_name].filter(Boolean).join(' › '),
         price: p.price_buy,
         scu: p.scu_buy || 0
       }));
     } else {
-      const data = await uexGet(`items_prices/id_item/${itemId}/`);
+      const data = await uexGet('items_prices', { id_item: itemId });
       return (data || []).filter(p => p.price_buy > 0).map(p => ({
-        terminal: p.terminal_name || p.id_terminal,
-        location: (p.star_system_name || '') + ' › ' + (p.planet_name || p.space_station_name || p.outpost_name || ''),
+        terminal: p.terminal_name || String(p.id_terminal),
+        location: [p.star_system_name, p.planet_name || p.space_station_name || p.outpost_name].filter(Boolean).join(' › '),
         price: p.price_buy,
         scu: null
       }));
     }
-  } catch(e) { return []; }
+  } catch(e) { console.warn('Price fetch failed:', e.message); return []; }
 }
 
 // Location clustering — find terminals that cover the most items on the list
@@ -1970,8 +2016,9 @@ window.showNewReqModal = function() {
     </div>
     <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
       <div style="font-size:9px;letter-spacing:2px;color:var(--text2);text-transform:uppercase;margin-bottom:10px">Shopping List</div>
+      <div id="req-catalog-status" class="notice info" style="margin-bottom:10px;display:none">Loading UEX catalog...</div>
       <div style="display:flex;gap:8px;margin-bottom:10px">
-        <input type="text" id="req-item-search" placeholder="Search items or commodities..." oninput="reqItemSearch()" style="flex:1">
+        <input type="text" id="req-item-search" placeholder="Search items or commodities..." oninput="reqItemSearch()" style="flex:1" disabled>
         <div style="font-size:10px;color:var(--text2);align-self:center;white-space:nowrap" id="req-search-status"></div>
       </div>
       <div id="req-search-results" style="max-height:180px;overflow-y:auto;margin-bottom:12px"></div>
@@ -1983,37 +2030,50 @@ window.showNewReqModal = function() {
   `;
   document.getElementById('modalOverlay').style.display = 'flex';
   renderReqItemList();
+
+  // Kick off catalog load if not ready
+  if (!window._uexCacheReady) {
+    const statusEl = document.getElementById('req-catalog-status');
+    const searchEl = document.getElementById('req-item-search');
+    if (statusEl) statusEl.style.display = '';
+    loadUexCatalog(msg => {
+      if (msg === 'ready') {
+        if (statusEl) statusEl.style.display = 'none';
+        if (searchEl) { searchEl.disabled = false; searchEl.placeholder = 'Search items or commodities...'; }
+        document.getElementById('req-search-status').textContent = (window._uexItemCache?.length || 0) + ' items + ' + (window._uexCommodityCache?.length || 0) + ' commodities loaded';
+      } else {
+        if (statusEl) statusEl.textContent = msg;
+      }
+    }).catch(e => {
+      if (statusEl) { statusEl.className = 'notice error'; statusEl.textContent = 'Failed to load UEX catalog: ' + e.message; }
+    });
+  } else {
+    const searchEl = document.getElementById('req-item-search');
+    if (searchEl) searchEl.disabled = false;
+    document.getElementById('req-search-status').textContent = (window._uexItemCache?.length || 0) + ' items + ' + (window._uexCommodityCache?.length || 0) + ' commodities loaded';
+  }
 };
 
-let _reqSearchTimeout = null;
-window.reqItemSearch = async function() {
+window.reqItemSearch = function() {
   const q = document.getElementById('req-item-search')?.value.trim();
   const statusEl = document.getElementById('req-search-status');
   const resultsEl = document.getElementById('req-search-results');
   if (!q || q.length < 2) { resultsEl.innerHTML = ''; return; }
+  if (!window._uexCacheReady) { resultsEl.innerHTML = '<div style="font-size:11px;color:var(--text3);padding:8px">Catalog still loading...</div>'; return; }
 
-  clearTimeout(_reqSearchTimeout);
-  _reqSearchTimeout = setTimeout(async () => {
-    statusEl.textContent = 'Searching UEX...';
-    try {
-      const results = await searchUexItems(q);
-      statusEl.textContent = results.length + ' results';
-      if (!results.length) { resultsEl.innerHTML = '<div style="font-size:11px;color:var(--text3);padding:8px">No results found.</div>'; return; }
-      resultsEl.innerHTML = results.map((item, i) => `
-        <div style="display:flex;align-items:center;gap:10px;padding:7px 10px;border-bottom:1px solid var(--border);cursor:pointer;transition:background 0.15s"
-          onmouseover="this.style.background='rgba(160,96,255,0.06)'" onmouseout="this.style.background=''"
-          onclick="addReqItem(${JSON.stringify(JSON.stringify(item))})">
-          <div style="flex:1">
-            <div style="font-size:12px">${item.name}</div>
-            <div style="font-size:10px;color:var(--text2)">${item._type === 'commodity' ? 'Commodity' : (item.category_name || 'Item')}</div>
-          </div>
-          <button class="btn sm" style="border-color:var(--purple);color:var(--purple);pointer-events:none">+</button>
-        </div>`).join('');
-    } catch(e) {
-      statusEl.textContent = '';
-      resultsEl.innerHTML = `<div style="font-size:11px;color:var(--red);padding:8px">Error: ${e.message}</div>`;
-    }
-  }, 350);
+  const results = searchUexCached(q);
+  if (statusEl) statusEl.textContent = results.length + ' results';
+  if (!results.length) { resultsEl.innerHTML = '<div style="font-size:11px;color:var(--text3);padding:8px">No results found.</div>'; return; }
+  resultsEl.innerHTML = results.map(item => `
+    <div style="display:flex;align-items:center;gap:10px;padding:7px 10px;border-bottom:1px solid var(--border);cursor:pointer;transition:background 0.15s"
+      onmouseover="this.style.background='rgba(160,96,255,0.06)'" onmouseout="this.style.background=''"
+      onclick="addReqItem(${JSON.stringify(JSON.stringify(item))})">
+      <div style="flex:1">
+        <div style="font-size:12px">${item.name}</div>
+        <div style="font-size:10px;color:var(--text2)">${item._type === 'commodity' ? 'Commodity' : (item.category_name || 'Item')}</div>
+      </div>
+      <button class="btn sm" style="border-color:var(--purple);color:var(--purple);pointer-events:none">+</button>
+    </div>`).join('');
 };
 
 window.addReqItem = function(itemJson) {
