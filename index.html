@@ -3128,19 +3128,19 @@ window.renderPlannerQueue = function(context) {
 };
 
 window.updatePlannerQty = function(i, context, val) {
-  const queue = context === 'org' ? window._orgCraftingQueue : window._craftingQueue;
+  const queue = (context === 'org' || context === 'orgcrafting') ? window._orgCraftingQueue : window._craftingQueue;
   queue[i].qty = Math.max(1, parseInt(val) || 1);
   renderShoppingList(context);
 };
 
 window.removePlannerItem = function(i, context) {
-  const queue = context === 'org' ? window._orgCraftingQueue : window._craftingQueue;
+  const queue = (context === 'org' || context === 'orgcrafting') ? window._orgCraftingQueue : window._craftingQueue;
   queue.splice(i, 1);
   renderPlannerQueue(context);
 };
 
 window.clearPlannerQueue = function(context) {
-  if (context === 'org') window._orgCraftingQueue = [];
+  if (context === 'org' || context === 'orgcrafting') window._orgCraftingQueue = [];
   else window._craftingQueue = [];
   renderPlannerQueue(context);
 };
@@ -3369,7 +3369,7 @@ window.confirmCompletePersonalJob = async function(jobPath, fullPath) {
 
 window.deleteJob = async function(dbPath, context) {
   if (!confirm('Delete this crafting job?')) return;
-  const basePath = context === 'org' ? 'crafting_jobs/' : 'personal_crafting_jobs/';
+  const basePath = (context === 'org' || context === 'orgcrafting') ? 'crafting_jobs/' : 'personal_crafting_jobs/';
   await remove(ref(db, basePath + dbPath));
 };
 
