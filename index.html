@@ -1645,9 +1645,25 @@ window.publishEvent = async function() {
 
 // ── My Inventory ──
 window.showAddPersonalModal = function() {
+  window._pmSelectedItem = null;
   document.getElementById('modalTitle').textContent = 'LOG PERSONAL HAUL';
   document.getElementById('modalBody').innerHTML = `
-    <div class="field"><label>Material Name</label><input type="text" id="pm-name" placeholder="Quantanium"></div>
+    <div id="pm-catalog-status" class="notice info" style="margin-bottom:10px;display:none">Loading item catalog...</div>
+    <div class="field">
+      <label>Search Material / Item</label>
+      <div style="display:flex;gap:8px">
+        <input type="text" id="pm-search" placeholder="Search Quantanium, Iron, armor..." oninput="pmItemSearch()" style="flex:1" disabled>
+        <div style="font-size:10px;color:var(--text2);align-self:center;white-space:nowrap" id="pm-search-status"></div>
+      </div>
+      <div id="pm-search-results" style="max-height:160px;overflow-y:auto;margin-top:6px"></div>
+    </div>
+    <div id="pm-selected-item" style="display:none;background:var(--panel2);border:1px solid var(--border);padding:10px 14px;margin-bottom:14px;border-radius:1px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="flex:1"><span id="pm-item-name" style="font-size:12px;font-weight:600"></span>
+        <span id="pm-item-type" style="font-size:10px;color:var(--text2);margin-left:8px"></span></div>
+        <button onclick="pmClearItem()" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:14px">×</button>
+      </div>
+    </div>
     <div class="grid2">
       <div class="field"><label>Quantity</label><input type="number" id="pm-qty" placeholder="5" min="0.01" step="0.01"></div>
       <div class="field"><label>Quality (1-999)</label><input type="number" id="pm-qual" placeholder="500" min="1" max="999"></div>
@@ -1659,15 +1675,81 @@ window.showAddPersonalModal = function() {
     <div class="btn-row"><button class="btn green" onclick="submitPersonalHaul()">Log Haul</button></div>
   `;
   document.getElementById('modalOverlay').style.display = 'flex';
+
+  // Load UEX catalog if not ready
+  if (!window._uexCacheReady) {
+    const statusEl = document.getElementById('pm-catalog-status');
+    const searchEl = document.getElementById('pm-search');
+    if (statusEl) statusEl.style.display = '';
+    loadUexCatalog(msg => {
+      if (msg === 'ready') {
+        if (statusEl) statusEl.style.display = 'none';
+        if (searchEl) { searchEl.disabled = false; searchEl.placeholder = 'Search Quantanium, Iron, armor...'; }
+        document.getElementById('pm-search-status').textContent = '';
+      } else {
+        if (statusEl) statusEl.textContent = msg;
+      }
+    }).catch(e => {
+      if (statusEl) { statusEl.className = 'notice error'; statusEl.textContent = 'UEX load failed: ' + e.message; }
+    });
+  } else {
+    const searchEl = document.getElementById('pm-search');
+    if (searchEl) searchEl.disabled = false;
+  }
+};
+
+window.pmItemSearch = function() {
+  const q = document.getElementById('pm-search')?.value.trim();
+  const resultsEl = document.getElementById('pm-search-results');
+  if (!q || q.length < 2) { if (resultsEl) resultsEl.innerHTML = ''; return; }
+  if (!window._uexCacheReady) return;
+  const results = searchUexCached(q);
+  window._pmSearchResults = results;
+  if (!resultsEl) return;
+  resultsEl.innerHTML = results.map((item, idx) => `
+    <div style="display:flex;align-items:center;gap:10px;padding:7px 10px;border-bottom:1px solid var(--border);cursor:pointer"
+      onmouseover="this.style.background='rgba(0,232,152,0.05)'" onmouseout="this.style.background=''"
+      onclick="pmSelectItem(${idx})">
+      <div style="flex:1"><div style="font-size:12px">${item.name}</div>
+      <div style="font-size:10px;color:var(--text2)">${item._type === 'commodity' ? 'Commodity' : (item.category_name || 'Item')}</div></div>
+      <button class="btn sm green" style="pointer-events:none">+</button>
+    </div>`).join('');
+};
+
+window._pmSearchResults = [];
+window._pmSelectedItem = null;
+
+window.pmSelectItem = function(idx) {
+  const item = (window._pmSearchResults || [])[idx];
+  if (!item) return;
+  window._pmSelectedItem = item;
+  document.getElementById('pm-search-results').innerHTML = '';
+  document.getElementById('pm-search').value = '';
+  const selEl = document.getElementById('pm-selected-item');
+  if (selEl) selEl.style.display = '';
+  const nameEl = document.getElementById('pm-item-name');
+  const typeEl = document.getElementById('pm-item-type');
+  if (nameEl) nameEl.textContent = item.name;
+  if (typeEl) typeEl.textContent = item._type === 'commodity' ? 'Commodity' : (item.category_name || 'Item');
+};
+
+window.pmClearItem = function() {
+  window._pmSelectedItem = null;
+  const selEl = document.getElementById('pm-selected-item');
+  if (selEl) selEl.style.display = 'none';
+  const searchEl = document.getElementById('pm-search');
+  if (searchEl) { searchEl.value = ''; searchEl.focus(); }
 };
 
 window.submitPersonalHaul = async function() {
-  const name = document.getElementById('pm-name').value.trim();
+  const selectedItem = window._pmSelectedItem;
+  const name = selectedItem ? selectedItem.name : '';
+  if (!name) { alert('Search and select a material from the list first.'); return; }
   const qty = parseFloat(document.getElementById('pm-qty').value);
   const qual = parseInt(document.getElementById('pm-qual').value);
   const splittable = document.getElementById('pm-split').value === 'yes';
   const notes = document.getElementById('pm-notes').value.trim();
-  if (!name || isNaN(qty) || qty <= 0 || isNaN(qual) || qual < 1 || qual > 999) { alert('Fill in all fields correctly.'); return; }
+  if (isNaN(qty) || qty <= 0 || isNaN(qual) || qual < 1 || qual > 999) { alert('Fill in quantity and quality correctly.'); return; }
 
   await push(ref(db, `personal_inventory/${window._session.memberId}`), {
     materialName: name, qty, quality: qual, splittable, notes,
@@ -2047,9 +2129,21 @@ window.deleteDistEntry = async function(id) {
 };
 
 window.showAddToBankModal = function() {
+  window._atbSelectedItem = null;
   document.getElementById('modalTitle').textContent = 'ADD TO ORG BANK';
   document.getElementById('modalBody').innerHTML = `
-    <div class="field"><label>Material Name</label><input type="text" id="atb-name" placeholder="Quantanium"></div>
+    <div id="atb-catalog-status" class="notice info" style="margin-bottom:10px;display:none">Loading item catalog...</div>
+    <div class="field">
+      <label>Search Material / Item</label>
+      <input type="text" id="atb-search" placeholder="Search Quantanium, Iron..." oninput="atbItemSearch()" disabled>
+      <div id="atb-search-results" style="max-height:140px;overflow-y:auto;margin-top:6px"></div>
+    </div>
+    <div id="atb-selected" style="display:none;background:var(--panel2);border:1px solid var(--border);padding:8px 12px;margin-bottom:12px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span id="atb-item-name" style="flex:1;font-size:12px;font-weight:600"></span>
+        <button onclick="atbClearItem()" style="background:none;border:none;color:var(--text2);cursor:pointer">×</button>
+      </div>
+    </div>
     <div class="grid2">
       <div class="field"><label>Quantity</label><input type="number" id="atb-qty" placeholder="10" min="1" step="1"></div>
       <div class="field"><label>Quality (1-999)</label><input type="number" id="atb-qual" placeholder="500" min="1" max="999"></div>
@@ -2062,10 +2156,68 @@ window.showAddToBankModal = function() {
     <div class="btn-row"><button class="btn gold" onclick="submitAddToBank()">Add to Bank</button></div>
   `;
   document.getElementById('modalOverlay').style.display = 'flex';
+
+  // Load UEX catalog if needed
+  if (!window._uexCacheReady) {
+    const statusEl = document.getElementById('atb-catalog-status');
+    const searchEl = document.getElementById('atb-search');
+    if (statusEl) statusEl.style.display = '';
+    loadUexCatalog(msg => {
+      if (msg === 'ready') {
+        if (statusEl) statusEl.style.display = 'none';
+        if (searchEl) searchEl.disabled = false;
+      } else if (statusEl) statusEl.textContent = msg;
+    }).catch(() => {});
+  } else {
+    const searchEl = document.getElementById('atb-search');
+    if (searchEl) searchEl.disabled = false;
+  }
+};
+
+// Add to bank search helpers
+window._atbSelectedItem = null;
+
+window.atbItemSearch = function() {
+  const q = document.getElementById('atb-search')?.value.trim();
+  const resultsEl = document.getElementById('atb-search-results');
+  if (!q || q.length < 2 || !window._uexCacheReady) { if (resultsEl) resultsEl.innerHTML = ''; return; }
+  const results = searchUexCached(q);
+  window._atbSearchResults = results;
+  if (!resultsEl) return;
+  resultsEl.innerHTML = results.map((item, idx) => `
+    <div style="display:flex;align-items:center;gap:10px;padding:6px 10px;border-bottom:1px solid var(--border);cursor:pointer"
+      onmouseover="this.style.background='rgba(255,192,64,0.05)'" onmouseout="this.style.background=''"
+      onclick="atbSelectItem(${idx})">
+      <div style="flex:1"><div style="font-size:12px">${item.name}</div>
+      <div style="font-size:10px;color:var(--text2)">${item._type === 'commodity' ? 'Commodity' : (item.category_name || 'Item')}</div></div>
+      <button class="btn sm gold" style="pointer-events:none">+</button>
+    </div>`).join('');
+};
+
+window._atbSearchResults = [];
+window.atbSelectItem = function(idx) {
+  const item = (window._atbSearchResults || [])[idx];
+  if (!item) return;
+  window._atbSelectedItem = item;
+  document.getElementById('atb-search-results').innerHTML = '';
+  document.getElementById('atb-search').value = '';
+  const selEl = document.getElementById('atb-selected');
+  if (selEl) selEl.style.display = '';
+  const nameEl = document.getElementById('atb-item-name');
+  if (nameEl) nameEl.textContent = item.name;
+};
+
+window.atbClearItem = function() {
+  window._atbSelectedItem = null;
+  const selEl = document.getElementById('atb-selected');
+  if (selEl) selEl.style.display = 'none';
+  const searchEl = document.getElementById('atb-search');
+  if (searchEl) { searchEl.value = ''; searchEl.focus(); }
 };
 
 window.submitAddToBank = async function() {
-  const name = document.getElementById('atb-name').value.trim();
+  const name = window._atbSelectedItem ? window._atbSelectedItem.name : '';
+  if (!name) { alert('Search and select a material first.'); return; }
   const qty = parseInt(document.getElementById('atb-qty').value);
   const qual = parseInt(document.getElementById('atb-qual').value);
   const splittable = document.getElementById('atb-split').value === 'yes';
@@ -2668,6 +2820,27 @@ function formatCraftTime(secs) {
   return Math.floor(secs/60) + 'm' + (secs%60 > 0 ? ' ' + secs%60 + 's' : '');
 }
 
+function calcQualityFactor(quality, modifierAtStart, modifierAtEnd) {
+  const q = Math.max(0, Math.min(1000, quality));
+  return modifierAtStart + (q / 1000) * (modifierAtEnd - modifierAtStart);
+}
+
+function getInventoryQuality(matName, isOrg) {
+  const name = matName.toLowerCase();
+  if (isOrg) {
+    const entries = Object.values(window._orgBankData || {})
+      .filter(e => e.materialName?.toLowerCase() === name && e.status === 'undistributed');
+    if (!entries.length) return null;
+    // Return highest quality entry
+    return Math.max(...entries.map(e => e.quality || 0));
+  } else {
+    const entries = Object.values(window._personalInvCache || {})
+      .filter(i => i.materialName?.toLowerCase() === name);
+    if (!entries.length) return null;
+    return Math.max(...entries.map(i => i.quality || 0));
+  }
+}
+
 function renderBlueprintDetail(bp, context) {
   const isOrg = context === 'org';
   const tiers = bp.tiers || [];
@@ -2677,39 +2850,71 @@ function renderBlueprintDetail(bp, context) {
     const slots = tier.slots || [];
     const slotHtml = slots.map(slot => {
       const opts = slot.options || [];
+      const mods = slot.modifiers || [];
+
       const optHtml = opts.map(opt => {
         const gradeColor = opt.minQuality >= 750 ? 'var(--green)' : opt.minQuality >= 500 ? 'var(--orange)' : opt.minQuality >= 250 ? 'var(--accent)' : 'var(--text2)';
         const grade = opt.minQuality >= 750 ? 'Prime' : opt.minQuality >= 500 ? 'High' : opt.minQuality >= 250 ? 'Standard' : 'Any';
         const inStock = isOrg ? getOrgBankQty(opt.resourceName) : getPersonalInvQty(opt.resourceName);
         const needed = opt.quantity;
         const stockColor = inStock >= needed ? 'var(--green)' : inStock > 0 ? 'var(--orange)' : 'var(--text3)';
-        return `<div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid rgba(26,45,63,0.3)">
-          <span style="flex:1;font-size:11px">${opt.resourceName}</span>
-          <span style="font-size:11px;color:var(--text)">×${opt.quantity} SCU</span>
-          <span class="tag" style="background:${gradeColor}22;border:1px solid ${gradeColor}44;color:${gradeColor};font-size:9px">${grade}${opt.minQuality > 0 ? ' (' + opt.minQuality + '+)' : ''}</span>
-          <span style="font-size:10px;color:${stockColor}">${isOrg ? 'Bank' : 'Inv'}: ${inStock}</span>
+
+        // Quality calculator
+        const invQual = getInventoryQuality(opt.resourceName, isOrg);
+        let qualHtml = '';
+        if (mods.length && invQual !== null) {
+          const qualPct = Math.round((invQual / 999) * 100);
+          const qualGradeColor = invQual >= 750 ? 'var(--green)' : invQual >= 500 ? 'var(--orange)' : invQual >= 250 ? 'var(--accent)' : 'var(--text2)';
+          qualHtml = `<div style="margin-top:6px;padding:8px 10px;background:var(--bg);border:1px solid var(--border);border-radius:1px">
+            <div style="font-size:9px;letter-spacing:1px;color:var(--text2);text-transform:uppercase;margin-bottom:6px">Quality Calculator · ${opt.resourceName} Q:${invQual}</div>
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+              <div style="flex:1;height:4px;background:var(--border);border-radius:2px;overflow:hidden">
+                <div style="height:100%;width:${qualPct}%;background:${qualGradeColor};border-radius:2px"></div>
+              </div>
+              <span style="font-size:10px;color:${qualGradeColor}">${invQual}/999</span>
+            </div>
+            ${mods.map(mod => {
+              const factor = calcQualityFactor(invQual, mod.modifierAtStart, mod.modifierAtEnd);
+              const pctChange = ((factor - 1.0) * 100);
+              const changeColor = pctChange >= 0 ? 'var(--green)' : 'var(--red)';
+              const changeStr = (pctChange >= 0 ? '+' : '') + pctChange.toFixed(1) + '%';
+              const baseColor = 'var(--text2)';
+              const factorStr = 'x' + factor.toFixed(3);
+              return `<div style="display:flex;align-items:center;gap:8px;padding:3px 0;border-bottom:1px solid rgba(26,45,63,0.3)">
+                <span style="flex:1;font-size:11px">${mod.propertyName}</span>
+                <span style="font-size:10px;color:${baseColor}">${factorStr}</span>
+                <span style="font-size:11px;font-weight:600;color:${changeColor}">${changeStr}</span>
+              </div>`;
+            }).join('')}
+          </div>`;
+        } else if (mods.length && invQual === null) {
+          qualHtml = `<div style="font-size:10px;color:var(--text3);margin-top:4px;font-style:italic">No ${opt.resourceName} in ${isOrg ? 'org bank' : 'inventory'} — log some to see quality effects</div>`;
+        }
+
+        return `<div style="padding:6px 0;border-bottom:1px solid rgba(26,45,63,0.3)">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="flex:1;font-size:11px">${opt.resourceName}</span>
+            <span style="font-size:11px;color:var(--text)">×${opt.quantity} SCU</span>
+            <span class="tag" style="background:${gradeColor}22;border:1px solid ${gradeColor}44;color:${gradeColor};font-size:9px">${grade}${opt.minQuality > 0 ? ' (' + opt.minQuality + '+)' : ''}</span>
+            <span style="font-size:10px;color:${stockColor}">${isOrg ? 'Bank' : 'Inv'}: ${inStock}</span>
+          </div>
+          ${qualHtml}
         </div>`;
       }).join('');
-      return `<div style="margin-bottom:10px">
-        <div style="font-size:10px;letter-spacing:1px;color:var(--text2);text-transform:uppercase;margin-bottom:4px">${slot.name}</div>
+
+      return `<div style="margin-bottom:12px">
+        <div style="font-size:10px;letter-spacing:1px;color:var(--text2);text-transform:uppercase;margin-bottom:6px">${slot.name}</div>
         ${optHtml}
       </div>`;
     }).join('');
+
     return `<div style="margin-bottom:12px">
       ${tiers.length > 1 ? `<div style="font-size:9px;letter-spacing:2px;color:var(--accent);text-transform:uppercase;margin-bottom:8px">Tier ${ti+1} · ${formatCraftTime(tier.craftTimeSeconds)}</div>` : ''}
       ${slotHtml}
     </div>`;
   }).join('');
 
-  const props = window._blueprintData?.properties || {};
-  const catProps = Object.entries(props).filter(([k]) => k.startsWith(bp.type));
-  const propsHtml = catProps.length ? `<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
-    <div style="font-size:9px;letter-spacing:2px;color:var(--purple);text-transform:uppercase;margin-bottom:6px">Quality Effects</div>
-    <div style="display:flex;flex-wrap:wrap;gap:6px">
-      ${catProps.map(([k,v]) => `<span class="tag" style="background:var(--purple-dim);border:1px solid rgba(160,96,255,0.2);color:var(--purple);font-size:9px">${v.name}</span>`).join('')}
-    </div>
-  </div>` : '';
-  return tierHtml + propsHtml;
+  return tierHtml;
 }
 
 function getOrgBankQty(matName) {
@@ -2852,7 +3057,7 @@ window.renderShoppingList = function(context) {
   const aggregated = aggregateMaterials(queue);
   if (!Object.keys(aggregated).length) { el.innerHTML = '<div style="font-size:11px;color:var(--text3)">No materials needed.</div>'; return; }
 
-  el.innerHTML = `<table class="tbl"><thead><tr><th>Material</th><th>Needed SCU</th><th>Min Quality</th><th>${isOrg ? 'In Bank' : 'In Inventory'}</th><th>Status</th></tr></thead><tbody>` +
+  el.innerHTML = `<table class="tbl"><thead><tr><th>Material</th><th>Needed SCU</th><th>Min Quality</th><th>${isOrg ? 'In Bank' : 'In Inventory'}</th><th>Your Quality</th><th>Status</th></tr></thead><tbody>` +
     Object.entries(aggregated).sort((a,b) => a[0].localeCompare(b[0])).map(([mat, info]) => {
       const inStock = isOrg ? getOrgBankQty(mat) : getPersonalInvQty(mat);
       const needed = Math.ceil(info.qty * 100) / 100;
@@ -2861,10 +3066,14 @@ window.renderShoppingList = function(context) {
       else if (inStock > 0) { sc='var(--orange)'; sl='PARTIAL ('+inStock+'/'+needed+')'; }
       else { sc='var(--red)'; sl='NEEDS SOURCING'; }
       const grade = info.minQuality >= 750 ? 'Prime' : info.minQuality >= 500 ? 'High' : info.minQuality >= 250 ? 'Standard' : 'Any';
+      const invQual3 = getInventoryQuality(mat, isOrg);
+      const qualDisplay3 = invQual3 !== null ? invQual3 : '—';
+      const qualColor3 = invQual3 >= 750 ? 'var(--green)' : invQual3 >= 500 ? 'var(--orange)' : invQual3 >= 250 ? 'var(--accent)' : 'var(--text2)';
       return `<tr>
         <td style="font-weight:600">${mat}</td><td>${needed}</td>
         <td><span class="tag" style="font-size:9px;color:var(--accent);background:var(--accent-dim);border:1px solid rgba(0,200,240,0.2)">${grade}</span></td>
         <td style="color:var(--text2)">${inStock}</td>
+        <td style="color:${qualColor3};font-size:11px">${qualDisplay3}</td>
         <td><span class="tag" style="background:${sc}22;border:1px solid ${sc}44;color:${sc};font-size:9px">${sl}</span></td>
       </tr>`;
     }).join('') + '</tbody></table>';
@@ -2937,7 +3146,7 @@ window.renderCraftingJobs = function(context) {
         </select>
         <button class="btn sm red" onclick="deleteJob('${dbPath}','${context}')">×</button>` : ''}
       </div>
-      <table class="tbl"><thead><tr><th>Material</th><th>Needed SCU</th><th>Min Quality</th><th>${isOrg?'In Bank':'In Inventory'}</th><th>Status</th></tr></thead>
+      <table class="tbl"><thead><tr><th>Material</th><th>Needed SCU</th><th>Min Quality</th><th>${isOrg?'In Bank':'In Inventory'}</th><th>Your Quality</th><th>Status</th></tr></thead>
       <tbody>${mats.map(([mat, info]) => {
         const inStock = isOrg ? getOrgBankQty(mat) : getPersonalInvQty(mat);
         const needed = Math.ceil((info.qty||0)*100)/100;
@@ -2946,9 +3155,13 @@ window.renderCraftingJobs = function(context) {
         else if(inStock>0){sc2='var(--orange)';sl2='PARTIAL';}
         else{sc2='var(--red)';sl2='NEEDED';}
         const grade=(info.minQuality||0)>=750?'Prime':(info.minQuality||0)>=500?'High':(info.minQuality||0)>=250?'Standard':'Any';
+        const invQual2 = isOrg ? getInventoryQuality(mat, true) : getInventoryQuality(mat, false);
+        const qualDisplay = invQual2 !== null ? invQual2 : '—';
+        const qualColor2 = invQual2 >= 750 ? 'var(--green)' : invQual2 >= 500 ? 'var(--orange)' : invQual2 >= 250 ? 'var(--accent)' : 'var(--text2)';
         return `<tr><td>${mat}</td><td>${needed}</td>
           <td><span class="tag" style="font-size:9px;color:var(--accent)">${grade}</span></td>
           <td>${inStock}</td>
+          <td style="color:${qualColor2};font-size:11px">${qualDisplay}</td>
           <td><span class="tag" style="background:${sc2}22;border:1px solid ${sc2}44;color:${sc2};font-size:9px">${sl2}</span></td>
         </tr>`;
       }).join('')}</tbody></table>
