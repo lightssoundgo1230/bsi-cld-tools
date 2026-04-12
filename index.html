@@ -739,6 +739,7 @@ label { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: 
       <button class="nav-tab active" id="craftab-blueprints" onclick="switchCraftTab('blueprints','crafting')" style="border-bottom:none">Blueprints</button>
       <button class="nav-tab" id="craftab-planner" onclick="switchCraftTab('planner','crafting')" style="border-bottom:none">Planner</button>
       <button class="nav-tab" id="craftab-jobs" onclick="switchCraftTab('jobs','crafting')" style="border-bottom:none">My Jobs</button>
+      <button class="nav-tab" id="craftab-mining" onclick="switchCraftTab('mining','crafting')" style="border-bottom:none">⛏ Mining Plan</button>
     </div>
 
     <!-- Blueprints tab (personal) -->
@@ -788,6 +789,15 @@ label { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: 
     <div id="craft-tab-jobs" style="display:none">
       <div id="craftingJobsList"><div class="empty">No personal crafting jobs.</div></div>
     </div>
+
+    <!-- Mining Plan tab (personal) -->
+    <div id="craft-tab-mining" style="display:none">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+        <div style="font-size:11px;color:var(--text2)">Shows materials needed across all active personal jobs.</div>
+        <button class="btn sm green" onclick="buildMiningPlan('personal')">⛏ Build Mining Plan</button>
+      </div>
+      <div id="miningPlanContent"><div class="empty">Hit "Build Mining Plan" to generate a plan from your active jobs.</div></div>
+    </div>
   </div>
 
   <!-- ORG CRAFTING (CLD Leadership + DoC only) -->
@@ -798,6 +808,7 @@ label { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: 
         <span id="orgcrafting-version" style="font-size:10px;color:var(--text2);letter-spacing:1px"></span>
         <button class="btn sm green" id="btn-refresh-blueprints" onclick="refreshBlueprintData()">↻ Blueprints</button>
         <button class="btn sm" style="border-color:var(--accent);color:var(--accent)" id="btn-refresh-uex" onclick="refreshUexCatalog()">↻ Item Catalog</button>
+        <button class="btn sm orange" id="btn-refresh-mining" onclick="refreshMiningData()">↻ Mining Data</button>
         <span id="uex-catalog-version" style="font-size:10px;color:var(--text2);letter-spacing:1px"></span>
       </div>
     </div>
@@ -805,6 +816,7 @@ label { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: 
       <button class="nav-tab active" id="orgcraftab-blueprints" onclick="switchCraftTab('blueprints','orgcrafting')" style="border-bottom:none">Blueprints</button>
       <button class="nav-tab" id="orgcraftab-planner" onclick="switchCraftTab('planner','orgcrafting')" style="border-bottom:none">Planner</button>
       <button class="nav-tab" id="orgcraftab-jobs" onclick="switchCraftTab('jobs','orgcrafting')" style="border-bottom:none">Org Jobs</button>
+      <button class="nav-tab" id="orgcraftab-mining" onclick="switchCraftTab('mining','orgcrafting')" style="border-bottom:none">⛏ Mining Plan</button>
     </div>
 
     <!-- Blueprints tab (org) -->
@@ -853,6 +865,15 @@ label { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: 
     <!-- Org Jobs tab -->
     <div id="orgcraft-tab-jobs" style="display:none">
       <div id="orgCraftingJobsList"><div class="empty">No org crafting jobs.</div></div>
+    </div>
+
+    <!-- Mining Plan tab (org) -->
+    <div id="orgcraft-tab-mining" style="display:none">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+        <div style="font-size:11px;color:var(--text2)">Shows materials needed across all active org jobs.</div>
+        <button class="btn sm green" onclick="buildMiningPlan('org')">⛏ Build Mining Plan</button>
+      </div>
+      <div id="orgMiningPlanContent"><div class="empty">Hit "Build Mining Plan" to generate a plan from active org jobs.</div></div>
     </div>
   </div>
 
@@ -1368,6 +1389,11 @@ function loadAll() {
       window._uexCacheLoading = false;
       const verEl = document.getElementById('uex-catalog-version');
       if (verEl) verEl.textContent = cached.cachedAt ? 'Items: ' + new Date(cached.cachedAt).toLocaleDateString() : '';
+    }
+  });
+  onValue(ref(db, 'config/mining_data_cache'), snap => {
+    if (snap.exists()) {
+      window._miningData = snap.val();
     }
   });
   onValue(ref(db, 'config/blueprint_cache'), snap => {
@@ -2803,11 +2829,12 @@ window.showSourcingPanel = async function(reqId) {
 
 // ── Crafting / Blueprints ──
 window._craftingJobsData = {};
+window._miningData = null;
 
 window.switchCraftTab = function(tab, context) {
   const prefix = context === 'org' ? 'orgcraft' : 'craft';
   const tabPrefix = context === 'org' ? 'orgcraftab' : 'craftab';
-  ['blueprints','planner','jobs'].forEach(t => {
+  ['blueprints','planner','jobs','mining'].forEach(t => {
     const el = document.getElementById(prefix + '-tab-' + t);
     if (el) el.style.display = t === tab ? '' : 'none';
     document.getElementById(tabPrefix + '-' + t)?.classList.toggle('active', t === tab);
@@ -3412,6 +3439,168 @@ window.refreshBlueprintData = async function() {
     alert('Refresh failed: ' + e.message);
   } finally {
     if (btn) { btn.textContent = '↻ Refresh Data'; btn.disabled = false; }
+  }
+};
+
+// ── Mining Plan ──
+window.buildMiningPlan = function(context) {
+  const isOrg = context === 'org';
+  const elId = isOrg ? 'orgMiningPlanContent' : 'miningPlanContent';
+  const el = document.getElementById(elId);
+  if (!el) return;
+
+  const jobs = isOrg
+    ? Object.values(window._craftingJobsData || {})
+    : Object.values((window._personalJobsData || {})[window._session?.memberId] || {});
+
+  const activeJobs = jobs.filter(j => ['planning','committed','in_progress'].includes(j.status));
+  if (!activeJobs.length) {
+    el.innerHTML = '<div class="notice info">No active jobs found. Create a crafting job first.</div>';
+    return;
+  }
+
+  const needed = {};
+  for (const job of activeJobs) {
+    for (const [mat, info] of Object.entries(job.materials || {})) {
+      const inStock = isOrg ? getOrgBankQty(mat) : getPersonalInvQty(mat);
+      const shortfall = Math.max(0, (info.qty || 0) - inStock);
+      if (shortfall > 0) {
+        if (!needed[mat]) needed[mat] = { qty: 0, minQuality: info.minQuality || 0 };
+        needed[mat].qty += shortfall;
+        needed[mat].minQuality = Math.max(needed[mat].minQuality, info.minQuality || 0);
+      }
+    }
+  }
+
+  if (!Object.keys(needed).length) {
+    el.innerHTML = '<div class="notice success">✓ All materials for active jobs are already in stock!</div>';
+    return;
+  }
+
+  const miningData = window._miningData;
+  if (!miningData) {
+    el.innerHTML = '<div class="notice warn" style="margin-bottom:16px">⚠ Mining data not cached. CLD Leadership can load it via ↻ Mining Data in Org Crafting.</div>' + renderNeededList(needed, null);
+    return;
+  }
+  el.innerHTML = renderNeededList(needed, miningData);
+};
+
+function renderNeededList(needed, miningData) {
+  const elements = miningData ? (miningData.mineableElements || {}) : {};
+  const locations = miningData ? (miningData.locations || {}) : {};
+  const compositions = miningData ? (miningData.compositions || {}) : {};
+
+  // Build reverse index: base element name → locations with probability
+  const elementLocations = {};
+  for (const [locId, loc] of Object.entries(locations)) {
+    const compId = loc.compositionId || loc.composition;
+    const comp = compositions[compId];
+    if (!comp) continue;
+    for (const [elemId, prob] of Object.entries(comp.elements || {})) {
+      const elemName = (elements[elemId]?.name || '').replace(' (Ore)','').replace(' (Raw)','');
+      if (!elemName) continue;
+      if (!elementLocations[elemName]) elementLocations[elemName] = [];
+      elementLocations[elemName].push({
+        location: loc.name || locId,
+        body: loc.body || loc.planet || '',
+        system: loc.system || 'Stanton',
+        probability: typeof prob === 'number' ? prob : (prob.probability || prob.chance || 0),
+        type: loc.type || 'space'
+      });
+    }
+  }
+
+  const rarityColor = { common:'var(--text2)', uncommon:'var(--accent)', rare:'var(--orange)', epic:'var(--purple)', legendary:'var(--green)' };
+
+  return Object.entries(needed).map(([mat, info]) => {
+    const elemEntry = Object.values(elements).find(e => {
+      const base = (e.name||'').replace(' (Ore)','').replace(' (Raw)','').toLowerCase();
+      return base === mat.toLowerCase() || (e.name||'').toLowerCase() === mat.toLowerCase();
+    });
+
+    const rarity = elemEntry?.rarity || 'unknown';
+    const rc = rarityColor[rarity] || 'var(--text3)';
+    const instability = elemEntry?.instability || 0;
+    const resistance = elemEntry?.resistance || 0;
+    const scanSig = elemEntry?.scanSignature || elemEntry?.fpsScanSignature || null;
+    const isFPS = !!elemEntry?.fpsScanSignature && !elemEntry?.scanSignature;
+    const instColor = instability >= 700 ? 'var(--red)' : instability >= 400 ? 'var(--orange)' : 'var(--green)';
+    const resColor = resistance >= 0.7 ? 'var(--red)' : resistance >= 0.4 ? 'var(--orange)' : 'var(--green)';
+
+    const baseName = mat.replace(' (Ore)','').replace(' (Raw)','');
+    const locs = (elementLocations[baseName] || []).sort((a,b) => b.probability - a.probability).slice(0, 3);
+    const grade = info.minQuality >= 750 ? 'Prime' : info.minQuality >= 500 ? 'High' : info.minQuality >= 250 ? 'Standard' : 'Any';
+    const needed_qty = Math.ceil(info.qty * 100) / 100;
+
+    const locHtml = locs.length ? locs.map((l, i) => `
+      <div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid rgba(26,45,63,0.4)">
+        <span style="font-size:10px;color:var(--text3);min-width:16px">#${i+1}</span>
+        <div style="flex:1">
+          <span style="font-size:12px">${l.location}</span>
+          ${l.body ? `<span style="font-size:10px;color:var(--text2);margin-left:8px">${l.body}${l.system !== 'Stanton' ? ' · ' + l.system : ''}</span>` : ''}
+        </div>
+        <span class="tag" style="background:var(--green-dim);border:1px solid rgba(0,232,152,0.2);color:var(--green);font-size:9px">${(l.probability * 100).toFixed(1)}%</span>
+      </div>`).join('') :
+      `<div style="font-size:11px;color:var(--text3);padding:8px 0">${isFPS ? '🧱 FPS mining (ground/cave node)' : 'No location data — may be mission reward or FPS loot'}</div>`;
+
+    return `<div style="background:var(--panel2);border:1px solid var(--border);margin-bottom:12px">
+      <div style="padding:12px 16px;border-bottom:1px solid var(--border)">
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:${elemEntry ? '8px' : '0'}">
+          <span style="font-family:'Orbitron',sans-serif;font-size:13px">${mat}</span>
+          <span class="tag" style="background:${rc}22;border:1px solid ${rc}44;color:${rc};font-size:9px;text-transform:uppercase">${rarity}</span>
+          ${isFPS ? '<span class="tag" style="background:var(--accent-dim);border:1px solid rgba(0,200,240,0.2);color:var(--accent);font-size:9px">FPS</span>' : ''}
+          <span style="flex:1"></span>
+          <span style="font-size:11px;color:var(--text2)">Need: <strong style="color:var(--text)">${needed_qty} SCU</strong></span>
+          <span class="tag" style="background:var(--accent-dim);border:1px solid rgba(0,200,240,0.2);color:var(--accent);font-size:9px">Min ${grade}</span>
+        </div>
+        ${elemEntry ? `<div style="display:flex;gap:16px;flex-wrap:wrap">
+          <span style="font-size:11px;color:var(--text2)">Instability: <span style="color:${instColor}">${instability.toFixed(0)}</span></span>
+          <span style="font-size:11px;color:var(--text2)">Resistance: <span style="color:${resColor}">${resistance >= 0 ? '+' : ''}${(resistance * 100).toFixed(0)}%</span></span>
+          ${scanSig ? `<span style="font-size:11px;color:var(--text2)">Scan Sig: <span style="color:var(--text)">${scanSig}</span></span>` : ''}
+        </div>` : ''}
+      </div>
+      <div style="padding:8px 16px">
+        <div style="font-size:9px;letter-spacing:2px;color:var(--text2);text-transform:uppercase;margin-bottom:6px">Top Mining Locations</div>
+        ${locHtml}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+window.refreshMiningData = async function() {
+  const btn = document.getElementById('btn-refresh-mining');
+  if (btn) { btn.textContent = '↻ Fetching...'; btn.disabled = true; }
+  try {
+    const verRes = await fetch('https://lucky-hall-fcdf.lightssoundgobsi.workers.dev/versions.json');
+    if (!verRes.ok) throw new Error('versions.json failed: ' + verRes.status);
+    const versions = await verRes.json();
+    const latest = versions[0]?.version;
+    if (!latest) throw new Error('Could not determine version');
+
+    if (btn) btn.textContent = '↻ Loading...';
+    const mRes = await fetch('https://lucky-hall-fcdf.lightssoundgobsi.workers.dev/mining_data-' + latest + '.json');
+    if (!mRes.ok) throw new Error('Mining data fetch failed: ' + mRes.status);
+    const mData = await mRes.json();
+
+    const toCache = {
+      version: mData.version,
+      cachedAt: Date.now(),
+      cachedBy: window._session.username,
+      mineableElements: mData.mineableElements || {},
+      locations: mData.locations || {},
+      compositions: mData.compositions || {}
+    };
+
+    if (btn) btn.textContent = '↻ Saving...';
+    await set(ref(db, 'config/mining_data_cache'), toCache);
+    window._miningData = toCache;
+    const locCount = Object.keys(toCache.locations).length;
+    const elemCount = Object.keys(toCache.mineableElements).length;
+    alert('Mining data updated to ' + latest + ' · ' + elemCount + ' elements · ' + locCount + ' locations');
+  } catch(e) {
+    alert('Mining data refresh failed: ' + e.message);
+  } finally {
+    if (btn) { btn.textContent = '↻ Mining Data'; btn.disabled = false; }
   }
 };
 
