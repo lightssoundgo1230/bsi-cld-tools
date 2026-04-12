@@ -430,6 +430,8 @@ label { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: 
       <button class="nav-tab" onclick="showPage('myinv')" id="tab-myinv">My Inventory</button>
       <button class="nav-tab locked" id="tab-orgbank" onclick="showPage('orgbank')">Org Bank</button>
       <button class="nav-tab locked" id="tab-reqs" onclick="showPage('reqs')">Requisitions</button>
+      <button class="nav-tab locked" id="tab-crafting" onclick="showPage('crafting')">Crafting</button>
+      <button class="nav-tab locked" id="tab-orgcrafting" onclick="showPage('orgcrafting')">Org Crafting</button>
       <button class="nav-tab locked" id="tab-admin" onclick="showPage('admin')">Admin</button>
     </div>
     <div class="topbar-user">
@@ -664,6 +666,132 @@ label { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: 
     <div id="reqsList"><div class="empty">No requisitions yet.</div></div>
   </div>
 
+  <!-- CRAFTING -->
+  <!-- PERSONAL CRAFTING (all members) -->
+  <div class="page" id="page-crafting">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px">
+      <div class="section-title" style="margin-bottom:0;flex:1"><div class="dot" style="background:var(--green)"></div> Crafting</div>
+      <span id="crafting-version" style="font-size:10px;color:var(--text2);letter-spacing:1px"></span>
+    </div>
+    <div style="display:flex;gap:2px;margin-bottom:20px;border-bottom:1px solid var(--border)">
+      <button class="nav-tab active" id="craftab-blueprints" onclick="switchCraftTab('blueprints','crafting')" style="border-bottom:none">Blueprints</button>
+      <button class="nav-tab" id="craftab-planner" onclick="switchCraftTab('planner','crafting')" style="border-bottom:none">Planner</button>
+      <button class="nav-tab" id="craftab-jobs" onclick="switchCraftTab('jobs','crafting')" style="border-bottom:none">My Jobs</button>
+    </div>
+
+    <!-- Blueprints tab (personal) -->
+    <div id="craft-tab-blueprints">
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;align-items:center">
+        <input type="text" id="bp-search" placeholder="Search blueprints..." style="max-width:280px" oninput="filterBlueprints('personal')">
+        <select id="bp-type-filter" style="max-width:160px" onchange="filterBlueprints('personal')">
+          <option value="">All Types</option>
+          <option value="ammo">Ammo</option>
+          <option value="armor">Armor</option>
+          <option value="weapon">Weapon</option>
+          <option value="component">Component</option>
+          <option value="shield">Shield</option>
+          <option value="undersuit">Undersuit</option>
+          <option value="consumable">Consumable</option>
+        </select>
+        <select id="bp-resource-filter" style="max-width:180px" onchange="filterBlueprints('personal')">
+          <option value="">All Materials</option>
+        </select>
+        <span id="bp-count" style="font-size:10px;color:var(--text2)"></span>
+      </div>
+      <div id="bp-list"><div class="empty">Loading blueprint data...</div></div>
+    </div>
+
+    <!-- Planner tab (personal) -->
+    <div id="craft-tab-planner" style="display:none">
+      <div class="grid2">
+        <div>
+          <div class="section-title" style="font-size:9px"><div class="dot" style="background:var(--green)"></div> Add to Queue</div>
+          <input type="text" id="planner-search" placeholder="Search blueprints to add..." oninput="plannerSearch('personal')" style="margin-bottom:10px">
+          <div id="planner-search-results" style="max-height:200px;overflow-y:auto;margin-bottom:16px"></div>
+          <div class="section-title" style="font-size:9px;margin-top:8px"><div class="dot" style="background:var(--accent)"></div> Crafting Queue</div>
+          <div id="planner-queue"><div style="font-size:11px;color:var(--text3);padding:8px 0">No blueprints added yet.</div></div>
+        </div>
+        <div>
+          <div class="section-title" style="font-size:9px"><div class="dot" style="background:var(--orange)"></div> Shopping List vs Personal Inventory</div>
+          <div id="planner-shopping-list"><div style="font-size:11px;color:var(--text3);padding:8px 0">Add blueprints to see material requirements.</div></div>
+          <div class="btn-row" id="planner-actions" style="display:none">
+            <button class="btn green" onclick="createCraftingJob('personal')">Create Job</button>
+            <button class="btn sm red" onclick="clearPlannerQueue('personal')">Clear</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- My Jobs tab (personal) -->
+    <div id="craft-tab-jobs" style="display:none">
+      <div id="craftingJobsList"><div class="empty">No personal crafting jobs.</div></div>
+    </div>
+  </div>
+
+  <!-- ORG CRAFTING (CLD Leadership + DoC only) -->
+  <div class="page" id="page-orgcrafting">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px">
+      <div class="section-title" style="margin-bottom:0;flex:1"><div class="dot" style="background:var(--accent)"></div> Org Crafting</div>
+      <div style="display:flex;gap:10px;align-items:center">
+        <span id="orgcrafting-version" style="font-size:10px;color:var(--text2);letter-spacing:1px"></span>
+        <button class="btn sm green" id="btn-refresh-blueprints" onclick="refreshBlueprintData()">↻ Refresh Data</button>
+      </div>
+    </div>
+    <div style="display:flex;gap:2px;margin-bottom:20px;border-bottom:1px solid var(--border)">
+      <button class="nav-tab active" id="orgcraftab-blueprints" onclick="switchCraftTab('blueprints','orgcrafting')" style="border-bottom:none">Blueprints</button>
+      <button class="nav-tab" id="orgcraftab-planner" onclick="switchCraftTab('planner','orgcrafting')" style="border-bottom:none">Planner</button>
+      <button class="nav-tab" id="orgcraftab-jobs" onclick="switchCraftTab('jobs','orgcrafting')" style="border-bottom:none">Org Jobs</button>
+    </div>
+
+    <!-- Blueprints tab (org) -->
+    <div id="orgcraft-tab-blueprints">
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;align-items:center">
+        <input type="text" id="obp-search" placeholder="Search blueprints..." style="max-width:280px" oninput="filterBlueprints('org')">
+        <select id="obp-type-filter" style="max-width:160px" onchange="filterBlueprints('org')">
+          <option value="">All Types</option>
+          <option value="ammo">Ammo</option>
+          <option value="armor">Armor</option>
+          <option value="weapon">Weapon</option>
+          <option value="component">Component</option>
+          <option value="shield">Shield</option>
+          <option value="undersuit">Undersuit</option>
+          <option value="consumable">Consumable</option>
+        </select>
+        <select id="obp-resource-filter" style="max-width:180px" onchange="filterBlueprints('org')">
+          <option value="">All Materials</option>
+        </select>
+        <span id="obp-count" style="font-size:10px;color:var(--text2)"></span>
+      </div>
+      <div id="obp-list"><div class="empty">Loading blueprint data...</div></div>
+    </div>
+
+    <!-- Planner tab (org) -->
+    <div id="orgcraft-tab-planner" style="display:none">
+      <div class="grid2">
+        <div>
+          <div class="section-title" style="font-size:9px"><div class="dot" style="background:var(--accent)"></div> Add to Queue</div>
+          <input type="text" id="org-planner-search" placeholder="Search blueprints to add..." oninput="plannerSearch('org')" style="margin-bottom:10px">
+          <div id="org-planner-search-results" style="max-height:200px;overflow-y:auto;margin-bottom:16px"></div>
+          <div class="section-title" style="font-size:9px;margin-top:8px"><div class="dot" style="background:var(--accent)"></div> Crafting Queue</div>
+          <div id="org-planner-queue"><div style="font-size:11px;color:var(--text3);padding:8px 0">No blueprints added yet.</div></div>
+        </div>
+        <div>
+          <div class="section-title" style="font-size:9px"><div class="dot" style="background:var(--orange)"></div> Shopping List vs Org Bank</div>
+          <div id="org-planner-shopping-list"><div style="font-size:11px;color:var(--text3);padding:8px 0">Add blueprints to see material requirements.</div></div>
+          <div class="btn-row" id="org-planner-actions" style="display:none">
+            <button class="btn green" onclick="createCraftingJob('org')">Create Org Job</button>
+            <button class="btn sm red" onclick="clearPlannerQueue('org')">Clear</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Org Jobs tab -->
+    <div id="orgcraft-tab-jobs" style="display:none">
+      <div id="orgCraftingJobsList"><div class="empty">No org crafting jobs.</div></div>
+    </div>
+  </div>
+
   <!-- ADMIN (CLD Leadership only) -->
   <div class="page" id="page-admin">
     <div class="section-title"><div class="dot" style="background:var(--red)"></div> Admin Panel</div>
@@ -775,6 +903,11 @@ window._distLogData = {};
 window._currentCodes = { ...DEFAULT_CODES };
 window._reqsData = {};
 window._uexToken = '';
+window._blueprintData = null;   // { version, blueprints[], resources[], items[], properties{} }
+window._craftingQueue = [];       // personal planner queue
+window._orgCraftingQueue = [];    // org planner queue
+window._plannerSearchResults = [];
+window._personalJobsData = {};
 
 // ── Helpers ──
 function qualGrade(q) {
@@ -918,6 +1051,7 @@ window.doLogin = async function() {
     document.getElementById('app').style.display = 'block';
     setupUI();
     loadAll();
+    loadPersonalInvCache();
   }, 500);
 };
 
@@ -947,11 +1081,13 @@ function setupUI() {
   if (can('admin')) document.getElementById('tab-admin').classList.remove('locked');
   if (can('submit_req') || can('view_req')) document.getElementById('tab-reqs').classList.remove('locked');
   if (!can('submit_req')) document.getElementById('btn-new-req').style.display = 'none';
+  document.getElementById('tab-crafting').classList.remove('locked');
+  if (can('edit_orgbank')) document.getElementById('tab-orgcrafting').classList.remove('locked');
 }
 
 // ── Navigation ──
 window.showPage = function(page) {
-  const locked = { orgbank: !can('view_orgbank'), admin: !can('admin'), reqs: !can('submit_req') && !can('view_req') };
+  const locked = { orgbank: !can('view_orgbank'), admin: !can('admin'), reqs: !can('submit_req') && !can('view_req'), crafting: false, orgcrafting: !can('edit_orgbank') };
   if (locked[page]) return;
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
@@ -965,6 +1101,8 @@ window.showPage = function(page) {
   if (page === 'admin') renderAdmin();
   if (page === 'dashboard') renderDashboard();
   if (page === 'reqs') renderReqs();
+  if (page === 'crafting') initCraftingTab('personal');
+  if (page === 'orgcrafting') initCraftingTab('org');
 };
 
 // ── Load all data ──
@@ -1004,6 +1142,24 @@ function loadAll() {
   onValue(ref(db, 'config/uex_token'), snap => {
     if (snap.exists()) window._uexToken = snap.val();
   });
+  onValue(ref(db, 'config/blueprint_cache'), snap => {
+    if (snap.exists()) {
+      window._blueprintData = snap.val();
+      if (document.getElementById('page-crafting')?.classList.contains('active')) initCraftingTab('personal');
+    if (document.getElementById('page-orgcrafting')?.classList.contains('active')) initCraftingTab('org');
+    }
+  });
+  onValue(ref(db, 'crafting_jobs'), snap => {
+    window._craftingJobsData = snap.val() || {};
+    if (document.getElementById('orgcraft-tab-jobs') && document.getElementById('orgcraft-tab-jobs').style.display !== 'none') renderCraftingJobs('org');
+  });
+  if (window._session?.memberId) {
+    onValue(ref(db, 'personal_crafting_jobs/' + window._session.memberId), snap => {
+      if (!window._personalJobsData) window._personalJobsData = {};
+      window._personalJobsData[window._session.memberId] = snap.val() || {};
+      if (document.getElementById('craft-tab-jobs') && document.getElementById('craft-tab-jobs').style.display !== 'none') renderCraftingJobs('personal');
+    });
+  }
 }
 
 // ── Dashboard ──
@@ -2228,7 +2384,536 @@ window.showSourcingPanel = async function(reqId) {
   }
 };
 
+// ── Crafting / Blueprints ──
+window._craftingJobsData = {};
+
+window.switchCraftTab = function(tab, context) {
+  const prefix = context === 'org' ? 'orgcraft' : 'craft';
+  const tabPrefix = context === 'org' ? 'orgcraftab' : 'craftab';
+  ['blueprints','planner','jobs'].forEach(t => {
+    const el = document.getElementById(prefix + '-tab-' + t);
+    if (el) el.style.display = t === tab ? '' : 'none';
+    document.getElementById(tabPrefix + '-' + t)?.classList.toggle('active', t === tab);
+  });
+  if (tab === 'jobs') renderCraftingJobs(context);
+};
+
+window.initCraftingTab = function(context) {
+  const isOrg = context === 'org';
+  const data = window._blueprintData;
+  const versionEl = document.getElementById(isOrg ? 'orgcrafting-version' : 'crafting-version');
+  const listEl = document.getElementById(isOrg ? 'obp-list' : 'bp-list');
+
+  if (!data || !data.blueprints) {
+    if (listEl) listEl.innerHTML = '<div class="notice info">No blueprint data cached.' + (isOrg ? ' Click ↻ Refresh Data to load from SCMDB.' : ' Ask CLD Leadership to refresh blueprint data.') + '</div>';
+    if (versionEl) versionEl.textContent = '';
+    return;
+  }
+  if (versionEl) versionEl.textContent = 'v' + (data.version || '?') + ' · ' + (data.blueprints.length || 0) + ' blueprints';
+
+  // Populate resource filter dropdowns
+  const resFilterId = isOrg ? 'obp-resource-filter' : 'bp-resource-filter';
+  const resFilter = document.getElementById(resFilterId);
+  if (resFilter && resFilter.options.length <= 1) {
+    const allMats = [...(data.resources || []), ...(data.items || [])].sort();
+    allMats.forEach(r => {
+      const opt = document.createElement('option');
+      opt.value = r; opt.textContent = r;
+      resFilter.appendChild(opt);
+    });
+  }
+  filterBlueprints(context);
+};
+
+window.filterBlueprints = function(context) {
+  const isOrg = context === 'org';
+  const data = window._blueprintData;
+  if (!data?.blueprints) return;
+
+  const search = document.getElementById(isOrg ? 'obp-search' : 'bp-search')?.value.toLowerCase() || '';
+  const typeFilter = document.getElementById(isOrg ? 'obp-type-filter' : 'bp-type-filter')?.value || '';
+  const resFilter = document.getElementById(isOrg ? 'obp-resource-filter' : 'bp-resource-filter')?.value || '';
+
+  const filtered = data.blueprints.filter(bp => {
+    if (search && !bp.productName?.toLowerCase().includes(search)) return false;
+    if (typeFilter && bp.type !== typeFilter && bp.subtype !== typeFilter) return false;
+    if (resFilter) {
+      const allMats = (bp.tiers || []).flatMap(t => (t.slots || []).flatMap(s => (s.options || []).map(o => o.resourceName)));
+      if (!allMats.includes(resFilter)) return false;
+    }
+    return true;
+  });
+
+  const countEl = document.getElementById(isOrg ? 'obp-count' : 'bp-count');
+  const listEl = document.getElementById(isOrg ? 'obp-list' : 'bp-list');
+  if (countEl) countEl.textContent = filtered.length + ' blueprints';
+  if (!listEl) return;
+  if (!filtered.length) { listEl.innerHTML = '<div class="empty">No blueprints match filter.</div>'; return; }
+
+  listEl.innerHTML = filtered.map(bp => {
+    const tier = bp.tiers?.[0];
+    const slots = tier?.slots || [];
+    const craftTime = tier ? formatCraftTime(tier.craftTimeSeconds) : '?';
+    const matTags = slots.map(slot => {
+      const opt = slot.options?.[0];
+      if (!opt) return '';
+      return `<span class="tag" style="background:var(--panel2);border:1px solid var(--border);color:var(--text2);font-size:9px">${opt.resourceName} ×${opt.quantity}</span>`;
+    }).join('');
+    const safeGuid = bp.guid?.replace(/-/g,'_');
+    const detailId = (isOrg ? 'o' : '') + 'bpd_' + safeGuid;
+
+    return `<div style="background:var(--panel2);border:1px solid var(--border);margin-bottom:6px">
+      <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer" onclick="toggleBpDetail('${detailId}')">
+        <div style="flex:1">
+          <span style="font-size:12px;font-weight:600">${bp.productName}</span>
+          <span style="color:var(--text2);font-size:10px;margin-left:10px">${bp.type}${bp.subtype ? ' · ' + bp.subtype : ''}</span>
+        </div>
+        <span style="font-size:10px;color:var(--text2)">⏱ ${craftTime}</span>
+        <div style="display:flex;gap:4px;flex-wrap:wrap">${matTags}</div>
+        <button class="btn sm" style="border-color:var(--${isOrg?'accent':'green'});color:var(--${isOrg?'accent':'green'})" onclick="addBlueprintToPlanner('${bp.guid}','${context}');event.stopPropagation()">+ Plan</button>
+        <span style="color:var(--text2);font-size:12px">▾</span>
+      </div>
+      <div id="${detailId}" style="display:none;padding:0 14px 12px;border-top:1px solid var(--border)">
+        ${renderBlueprintDetail(bp, context)}
+      </div>
+    </div>`;
+  }).join('');
+};
+
+function formatCraftTime(secs) {
+  if (!secs) return '?';
+  if (secs < 60) return secs + 's';
+  return Math.floor(secs/60) + 'm' + (secs%60 > 0 ? ' ' + secs%60 + 's' : '');
+}
+
+function renderBlueprintDetail(bp, context) {
+  const isOrg = context === 'org';
+  const tiers = bp.tiers || [];
+  if (!tiers.length) return '<div style="font-size:11px;color:var(--text3);padding:8px 0">No tier data.</div>';
+
+  const tierHtml = tiers.map((tier, ti) => {
+    const slots = tier.slots || [];
+    const slotHtml = slots.map(slot => {
+      const opts = slot.options || [];
+      const optHtml = opts.map(opt => {
+        const gradeColor = opt.minQuality >= 750 ? 'var(--green)' : opt.minQuality >= 500 ? 'var(--orange)' : opt.minQuality >= 250 ? 'var(--accent)' : 'var(--text2)';
+        const grade = opt.minQuality >= 750 ? 'Prime' : opt.minQuality >= 500 ? 'High' : opt.minQuality >= 250 ? 'Standard' : 'Any';
+        const inStock = isOrg ? getOrgBankQty(opt.resourceName) : getPersonalInvQty(opt.resourceName);
+        const needed = opt.quantity;
+        const stockColor = inStock >= needed ? 'var(--green)' : inStock > 0 ? 'var(--orange)' : 'var(--text3)';
+        return `<div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid rgba(26,45,63,0.3)">
+          <span style="flex:1;font-size:11px">${opt.resourceName}</span>
+          <span style="font-size:11px;color:var(--text)">×${opt.quantity} SCU</span>
+          <span class="tag" style="background:${gradeColor}22;border:1px solid ${gradeColor}44;color:${gradeColor};font-size:9px">${grade}${opt.minQuality > 0 ? ' (' + opt.minQuality + '+)' : ''}</span>
+          <span style="font-size:10px;color:${stockColor}">${isOrg ? 'Bank' : 'Inv'}: ${inStock}</span>
+        </div>`;
+      }).join('');
+      return `<div style="margin-bottom:10px">
+        <div style="font-size:10px;letter-spacing:1px;color:var(--text2);text-transform:uppercase;margin-bottom:4px">${slot.name}</div>
+        ${optHtml}
+      </div>`;
+    }).join('');
+    return `<div style="margin-bottom:12px">
+      ${tiers.length > 1 ? `<div style="font-size:9px;letter-spacing:2px;color:var(--accent);text-transform:uppercase;margin-bottom:8px">Tier ${ti+1} · ${formatCraftTime(tier.craftTimeSeconds)}</div>` : ''}
+      ${slotHtml}
+    </div>`;
+  }).join('');
+
+  const props = window._blueprintData?.properties || {};
+  const catProps = Object.entries(props).filter(([k]) => k.startsWith(bp.type));
+  const propsHtml = catProps.length ? `<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
+    <div style="font-size:9px;letter-spacing:2px;color:var(--purple);text-transform:uppercase;margin-bottom:6px">Quality Effects</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px">
+      ${catProps.map(([k,v]) => `<span class="tag" style="background:var(--purple-dim);border:1px solid rgba(160,96,255,0.2);color:var(--purple);font-size:9px">${v.name}</span>`).join('')}
+    </div>
+  </div>` : '';
+  return tierHtml + propsHtml;
+}
+
+function getOrgBankQty(matName) {
+  return Object.values(window._orgBankData || {})
+    .filter(e => e.materialName?.toLowerCase() === matName?.toLowerCase() && e.status === 'undistributed')
+    .reduce((s, e) => s + (e.totalQty || 0), 0);
+}
+
+function getPersonalInvQty(matName) {
+  return Object.values(window._personalInvCache || {})
+    .filter(i => i.materialName?.toLowerCase() === matName?.toLowerCase())
+    .reduce((s, i) => s + (i.qty || 0), 0);
+}
+
+// Cache personal inventory for quick lookups
+window._personalInvCache = {};
+async function loadPersonalInvCache() {
+  if (!window._session?.memberId) return;
+  try {
+    const snap = await get(ref(db, 'personal_inventory/' + window._session.memberId));
+    window._personalInvCache = snap.exists() ? snap.val() : {};
+  } catch(e) {}
+}
+
+window.toggleBpDetail = function(id) {
+  const el = document.getElementById(id);
+  if (el) el.style.display = el.style.display === 'none' ? '' : 'none';
+};
+
+// ── Planner ──
+window.addBlueprintToPlanner = function(guid, context) {
+  const isOrg = context === 'org';
+  const data = window._blueprintData;
+  if (!data) return;
+  const bp = data.blueprints.find(b => b.guid === guid);
+  if (!bp) return;
+  const queue = isOrg ? window._orgCraftingQueue : window._craftingQueue;
+  const existing = queue.find(q => q.guid === guid);
+  if (existing) existing.qty++;
+  else queue.push({ guid, name: bp.productName, type: bp.type, qty: 1, bp });
+  // Navigate to the right tab's planner
+  if (isOrg) {
+    if (!document.getElementById('page-orgcrafting').classList.contains('active')) showPage('orgcrafting');
+    switchCraftTab('planner', 'org');
+  } else {
+    if (!document.getElementById('page-crafting').classList.contains('active')) showPage('crafting');
+    switchCraftTab('planner', 'personal');
+  }
+  renderPlannerQueue(context);
+};
+
+window.plannerSearch = function(context) {
+  const isOrg = context === 'org';
+  const searchId = isOrg ? 'org-planner-search' : 'planner-search';
+  const resultsId = isOrg ? 'org-planner-search-results' : 'planner-search-results';
+  const q = document.getElementById(searchId)?.value.toLowerCase() || '';
+  const resultsEl = document.getElementById(resultsId);
+  if (!q || q.length < 2 || !window._blueprintData) { if (resultsEl) resultsEl.innerHTML = ''; return; }
+  const results = window._blueprintData.blueprints.filter(bp => bp.productName?.toLowerCase().includes(q)).slice(0, 15);
+  if (!resultsEl) return;
+  resultsEl.innerHTML = results.map(bp => `
+    <div style="display:flex;align-items:center;gap:10px;padding:7px 10px;border-bottom:1px solid var(--border);cursor:pointer"
+      onmouseover="this.style.background='rgba(0,200,240,0.05)'" onmouseout="this.style.background=''"
+      onclick="addBlueprintToPlanner('${bp.guid}','${context}')">
+      <div style="flex:1"><div style="font-size:12px">${bp.productName}</div>
+      <div style="font-size:10px;color:var(--text2)">${bp.type}${bp.subtype?' · '+bp.subtype:''}</div></div>
+      <button class="btn sm" style="pointer-events:none;border-color:var(--${isOrg?'accent':'green'});color:var(--${isOrg?'accent':'green'})">+</button>
+    </div>`).join('');
+};
+
+window.renderPlannerQueue = function(context) {
+  const isOrg = context === 'org';
+  const queue = isOrg ? window._orgCraftingQueue : window._craftingQueue;
+  const qElId = isOrg ? 'org-planner-queue' : 'planner-queue';
+  const actElId = isOrg ? 'org-planner-actions' : 'planner-actions';
+  const qEl = document.getElementById(qElId);
+  const actEl = document.getElementById(actElId);
+
+  if (!queue.length) {
+    if (qEl) qEl.innerHTML = '<div style="font-size:11px;color:var(--text3);padding:8px 0">No blueprints added yet.</div>';
+    if (actEl) actEl.style.display = 'none';
+    renderShoppingList(context);
+    return;
+  }
+  if (actEl) actEl.style.display = '';
+  if (qEl) qEl.innerHTML = queue.map((item, i) => `
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+      <div style="flex:1"><div style="font-size:12px">${item.name}</div>
+      <div style="font-size:10px;color:var(--text2)">${item.type}</div></div>
+      <input type="number" value="${item.qty}" min="1" step="1" onchange="updatePlannerQty(${i},'${context}',this.value)"
+        style="width:60px;padding:4px 8px;font-size:11px">
+      <button class="btn sm red" onclick="removePlannerItem(${i},'${context}')">×</button>
+    </div>`).join('');
+  renderShoppingList(context);
+};
+
+window.updatePlannerQty = function(i, context, val) {
+  const queue = context === 'org' ? window._orgCraftingQueue : window._craftingQueue;
+  queue[i].qty = Math.max(1, parseInt(val) || 1);
+  renderShoppingList(context);
+};
+
+window.removePlannerItem = function(i, context) {
+  const queue = context === 'org' ? window._orgCraftingQueue : window._craftingQueue;
+  queue.splice(i, 1);
+  renderPlannerQueue(context);
+};
+
+window.clearPlannerQueue = function(context) {
+  if (context === 'org') window._orgCraftingQueue = [];
+  else window._craftingQueue = [];
+  renderPlannerQueue(context);
+};
+
+function aggregateMaterials(queue) {
+  const aggregated = {};
+  for (const item of queue) {
+    const tier = item.bp.tiers?.[0];
+    if (!tier) continue;
+    for (const slot of (tier.slots || [])) {
+      for (const opt of (slot.options || [])) {
+        const key = opt.resourceName;
+        if (!aggregated[key]) aggregated[key] = { qty: 0, minQuality: opt.minQuality || 0 };
+        aggregated[key].qty += opt.quantity * item.qty;
+        aggregated[key].minQuality = Math.max(aggregated[key].minQuality, opt.minQuality || 0);
+      }
+    }
+  }
+  return aggregated;
+}
+
+window.renderShoppingList = function(context) {
+  const isOrg = context === 'org';
+  const queue = isOrg ? window._orgCraftingQueue : window._craftingQueue;
+  const el = document.getElementById(isOrg ? 'org-planner-shopping-list' : 'planner-shopping-list');
+  if (!el) return;
+  if (!queue.length) { el.innerHTML = '<div style="font-size:11px;color:var(--text3);padding:8px 0">Add blueprints to see material requirements.</div>'; return; }
+
+  const aggregated = aggregateMaterials(queue);
+  if (!Object.keys(aggregated).length) { el.innerHTML = '<div style="font-size:11px;color:var(--text3)">No materials needed.</div>'; return; }
+
+  el.innerHTML = `<table class="tbl"><thead><tr><th>Material</th><th>Needed SCU</th><th>Min Quality</th><th>${isOrg ? 'In Bank' : 'In Inventory'}</th><th>Status</th></tr></thead><tbody>` +
+    Object.entries(aggregated).sort((a,b) => a[0].localeCompare(b[0])).map(([mat, info]) => {
+      const inStock = isOrg ? getOrgBankQty(mat) : getPersonalInvQty(mat);
+      const needed = Math.ceil(info.qty * 100) / 100;
+      let sc, sl;
+      if (inStock >= needed) { sc='var(--green)'; sl='IN STOCK'; }
+      else if (inStock > 0) { sc='var(--orange)'; sl='PARTIAL ('+inStock+'/'+needed+')'; }
+      else { sc='var(--red)'; sl='NEEDS SOURCING'; }
+      const grade = info.minQuality >= 750 ? 'Prime' : info.minQuality >= 500 ? 'High' : info.minQuality >= 250 ? 'Standard' : 'Any';
+      return `<tr>
+        <td style="font-weight:600">${mat}</td><td>${needed}</td>
+        <td><span class="tag" style="font-size:9px;color:var(--accent);background:var(--accent-dim);border:1px solid rgba(0,200,240,0.2)">${grade}</span></td>
+        <td style="color:var(--text2)">${inStock}</td>
+        <td><span class="tag" style="background:${sc}22;border:1px solid ${sc}44;color:${sc};font-size:9px">${sl}</span></td>
+      </tr>`;
+    }).join('') + '</tbody></table>';
+};
+
+window.createCraftingJob = async function(context) {
+  const isOrg = context === 'org';
+  const queue = isOrg ? window._orgCraftingQueue : window._craftingQueue;
+  if (!queue.length) return;
+  const name = prompt('Job name:', queue.map(i => i.name).join(', ').substring(0, 60));
+  if (!name) return;
+
+  const materials = aggregateMaterials(queue);
+  const jobData = {
+    name,
+    context: isOrg ? 'org' : 'personal',
+    blueprints: queue.map(i => ({ guid: i.guid, name: i.name, qty: i.qty })),
+    materials,
+    status: 'planning',
+    createdBy: window._session.username,
+    createdAt: Date.now()
+  };
+
+  const jobRef = isOrg ? 'crafting_jobs' : 'personal_crafting_jobs/' + window._session.memberId;
+  await push(ref(db, jobRef), jobData);
+  if (isOrg) window._orgCraftingQueue = []; else window._craftingQueue = [];
+  renderPlannerQueue(context);
+  switchCraftTab('jobs', context);
+};
+
+// ── Crafting Jobs ──
+window.renderCraftingJobs = function(context) {
+  const isOrg = context === 'org';
+  const elId = isOrg ? 'orgCraftingJobsList' : 'craftingJobsList';
+  const el = document.getElementById(elId);
+  if (!el) return;
+
+  let jobs;
+  if (isOrg) {
+    jobs = Object.entries(window._craftingJobsData || {});
+  } else {
+    // Personal: only show this member's jobs
+    const allPersonal = window._personalJobsData || {};
+    jobs = Object.entries(allPersonal[window._session?.memberId] || {});
+  }
+  jobs = jobs.sort((a,b) => (b[1].createdAt||0)-(a[1].createdAt||0));
+
+  if (!jobs.length) { el.innerHTML = '<div class="empty">No ' + (isOrg ? 'org' : 'personal') + ' crafting jobs.</div>'; return; }
+
+  const statusMap = { planning:['var(--text2)','PLANNING'], committed:['var(--accent)','COMMITTED'], in_progress:['var(--orange)','IN PROGRESS'], complete:['var(--green)','COMPLETE'] };
+  const canEdit = isOrg ? can('edit_orgbank') : true;
+
+  el.innerHTML = jobs.map(([id, job]) => {
+    const [sc, sl] = statusMap[job.status] || ['var(--text2)', (job.status||'').toUpperCase()];
+    const mats = Object.entries(job.materials || {});
+    const dbPath = isOrg ? id : window._session.memberId + '/' + id;
+
+    return `<div class="card" style="margin-bottom:12px">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap">
+        <div style="flex:1">
+          <div style="font-family:'Orbitron',sans-serif;font-size:12px">${job.name}</div>
+          <div style="font-size:10px;color:var(--text2);margin-top:4px">${job.blueprints?.map(b=>b.name+'×'+b.qty).join(', ')||''} · ${job.createdBy} · ${tsToDate(job.createdAt)}</div>
+        </div>
+        <span class="tag" style="background:${sc}22;border:1px solid ${sc}44;color:${sc}">${sl}</span>
+        ${canEdit ? `<select onchange="updateJobStatus('${dbPath}','${context}',this.value)" style="font-size:10px;padding:4px 8px;width:auto;background:var(--bg2)">
+          <option value="planning" ${job.status==='planning'?'selected':''}>Planning</option>
+          <option value="committed" ${job.status==='committed'?'selected':''}>Committed</option>
+          <option value="in_progress" ${job.status==='in_progress'?'selected':''}>In Progress</option>
+          <option value="complete" ${job.status==='complete'?'selected':''}>Complete</option>
+        </select>
+        <button class="btn sm red" onclick="deleteJob('${dbPath}','${context}')">×</button>` : ''}
+      </div>
+      <table class="tbl"><thead><tr><th>Material</th><th>Needed SCU</th><th>Min Quality</th><th>${isOrg?'In Bank':'In Inventory'}</th><th>Status</th></tr></thead>
+      <tbody>${mats.map(([mat, info]) => {
+        const inStock = isOrg ? getOrgBankQty(mat) : getPersonalInvQty(mat);
+        const needed = Math.ceil((info.qty||0)*100)/100;
+        let sc2,sl2;
+        if (inStock>=needed){sc2='var(--green)';sl2='IN STOCK';}
+        else if(inStock>0){sc2='var(--orange)';sl2='PARTIAL';}
+        else{sc2='var(--red)';sl2='NEEDED';}
+        const grade=(info.minQuality||0)>=750?'Prime':(info.minQuality||0)>=500?'High':(info.minQuality||0)>=250?'Standard':'Any';
+        return `<tr><td>${mat}</td><td>${needed}</td>
+          <td><span class="tag" style="font-size:9px;color:var(--accent)">${grade}</span></td>
+          <td>${inStock}</td>
+          <td><span class="tag" style="background:${sc2}22;border:1px solid ${sc2}44;color:${sc2};font-size:9px">${sl2}</span></td>
+        </tr>`;
+      }).join('')}</tbody></table>
+    </div>`;
+  }).join('');
+};
+
+window.updateJobStatus = async function(dbPath, context, status) {
+  const isOrg = context === 'org';
+  const basePath = isOrg ? 'crafting_jobs/' : 'personal_crafting_jobs/';
+  if (status === 'complete' && !isOrg) {
+    // Show confirmation modal with adjustable deductions
+    showCompletePersonalJobModal(dbPath, basePath + dbPath);
+    return;
+  }
+  await update(ref(db, basePath + dbPath), { status });
+};
+
+window.showCompletePersonalJobModal = async function(jobPath, fullPath) {
+  const pathParts = jobPath.split('/');
+  const memberId = pathParts[0];
+  const jobId = pathParts[1];
+  const job = (window._personalJobsData[memberId] || {})[jobId];
+  if (!job) return;
+
+  await loadPersonalInvCache();
+
+  const mats = Object.entries(job.materials || {});
+  const rows = mats.map(([mat, info]) => {
+    const needed = Math.ceil((info.qty||0)*100)/100;
+    const inInv = getPersonalInvQty(mat);
+    return `<div class="review-alloc-row" style="margin-bottom:10px">
+      <label style="min-width:130px">${mat}</label>
+      <input type="number" id="deduct_${mat.replace(/\s/g,'_')}" value="${Math.min(needed, inInv)}"
+        min="0" max="${inInv}" step="0.01" style="max-width:100px">
+      <span style="font-size:10px;color:var(--text2)">/ ${inInv} in inventory</span>
+    </div>`;
+  }).join('');
+
+  document.getElementById('modalTitle').textContent = 'COMPLETE JOB — DEDUCT MATERIALS';
+  document.getElementById('modalBody').innerHTML = `
+    <div class="notice info" style="margin-bottom:16px">Adjust quantities to deduct from your personal inventory. Set to 0 to skip a material.</div>
+    ${rows}
+    <div class="btn-row" style="margin-top:16px">
+      <button class="btn green" onclick="confirmCompletePersonalJob('${jobPath}','${fullPath}')">Confirm & Complete</button>
+      <button class="btn sm" onclick="closeModalDirect()">Cancel</button>
+    </div>`;
+  document.getElementById('modalOverlay').style.display = 'flex';
+};
+
+window.confirmCompletePersonalJob = async function(jobPath, fullPath) {
+  const pathParts = jobPath.split('/');
+  const memberId = pathParts[0];
+  const jobId = pathParts[1];
+  const job = (window._personalJobsData[memberId] || {})[jobId];
+  if (!job) return;
+
+  const mats = Object.entries(job.materials || {});
+
+  // Deduct from personal inventory
+  const invSnap = await get(ref(db, 'personal_inventory/' + window._session.memberId));
+  const inv = invSnap.exists() ? invSnap.val() : {};
+
+  for (const [mat] of mats) {
+    const inputEl = document.getElementById('deduct_' + mat.replace(/\s/g,'_'));
+    let toDeduct = parseFloat(inputEl?.value) || 0;
+    if (toDeduct <= 0) continue;
+
+    // Find inventory entries for this material and deduct
+    for (const [itemId, item] of Object.entries(inv)) {
+      if (item.materialName?.toLowerCase() !== mat.toLowerCase()) continue;
+      if (toDeduct <= 0) break;
+      const deductHere = Math.min(toDeduct, item.qty);
+      const newQty = Math.round((item.qty - deductHere) * 1000) / 1000;
+      if (newQty <= 0) {
+        await remove(ref(db, 'personal_inventory/' + window._session.memberId + '/' + itemId));
+      } else {
+        await update(ref(db, 'personal_inventory/' + window._session.memberId + '/' + itemId), { qty: newQty });
+      }
+      toDeduct -= deductHere;
+    }
+  }
+
+  // Mark job complete
+  await update(ref(db, fullPath), { status: 'complete', completedAt: Date.now() });
+  window._personalInvCache = {}; // Invalidate cache
+  closeModalDirect();
+  renderCraftingJobs('personal');
+};
+
+window.deleteJob = async function(dbPath, context) {
+  if (!confirm('Delete this crafting job?')) return;
+  const basePath = context === 'org' ? 'crafting_jobs/' : 'personal_crafting_jobs/';
+  await remove(ref(db, basePath + dbPath));
+};
+
+// ── Blueprint Refresh from SCMDB ──
+window.refreshBlueprintData = async function() {
+  const btn = document.getElementById('btn-refresh-blueprints');
+  if (btn) { btn.textContent = '↻ Fetching...'; btn.disabled = true; }
+  try {
+    const verRes = await fetch('https://scmdb.net/data/versions.json');
+    if (!verRes.ok) throw new Error('versions.json failed: ' + verRes.status);
+    const versions = await verRes.json();
+    const latest = versions[0]?.version;
+    if (!latest) throw new Error('Could not determine latest version');
+
+    if (window._blueprintData?.version === latest) {
+      alert('Already on latest version: ' + latest);
+      return;
+    }
+
+    if (btn) btn.textContent = '↻ Loading blueprints...';
+    const bpRes = await fetch('https://scmdb.net/data/crafting_blueprints-' + latest + '.json');
+    if (!bpRes.ok) throw new Error('Blueprints fetch failed: ' + bpRes.status);
+    const bpData = await bpRes.json();
+
+    const toCache = {
+      version: bpData.version,
+      cachedAt: Date.now(),
+      cachedBy: window._session.username,
+      resources: bpData.resources || [],
+      items: bpData.items || [],
+      properties: bpData.properties || {},
+      blueprints: (bpData.blueprints || []).map(bp => ({
+        guid: bp.guid,
+        productName: bp.productName,
+        type: bp.type,
+        subtype: bp.subtype || null,
+        isDefault: bp.isDefault || false,
+        tiers: bp.tiers
+      }))
+    };
+
+    if (btn) btn.textContent = '↻ Saving...';
+    await set(ref(db, 'config/blueprint_cache'), toCache);
+    window._blueprintData = toCache;
+    initCraftingTab('org');
+    alert('Blueprints updated to ' + latest + ' (' + toCache.blueprints.length + ' blueprints)');
+  } catch(e) {
+    alert('Refresh failed: ' + e.message);
+  } finally {
+    if (btn) { btn.textContent = '↻ Refresh Data'; btn.disabled = false; }
+  }
+};
+
 // ── Admin ──
+window.renderAdmin = function() {// ── Admin ──
 window.renderAdmin = function() {
   if (!can('admin')) return;
 
