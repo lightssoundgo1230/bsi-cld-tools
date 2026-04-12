@@ -1243,8 +1243,8 @@ function updateRequestsBadge() {
   } else { tab.textContent = 'Admin'; }
 }
 
-document.getElementById('loginPassword').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
-document.getElementById('loginUsername').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('loginPassword')?.focus(); });
+document.getElementById('loginPassword')?.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+document.getElementById('loginUsername')?.addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('loginPassword')?.focus(); });
 
 
 // ── UI Setup based on role ──
@@ -3231,8 +3231,6 @@ window.revokeMember = async function(id, username) {
 window.closeModal = function(e) { if (e.target === document.getElementById('modalOverlay')) closeModalDirect(); };
 window.closeModalDirect = function() { document.getElementById('modalOverlay').style.display = 'none'; };
 
-// Enter key
-document.getElementById('loginUsername').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
 </script>
 </body>
 </html>
