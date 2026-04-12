@@ -2832,8 +2832,8 @@ window._craftingJobsData = {};
 window._miningData = null;
 
 window.switchCraftTab = function(tab, context) {
-  const prefix = context === 'org' ? 'orgcraft' : 'craft';
-  const tabPrefix = context === 'org' ? 'orgcraftab' : 'craftab';
+  const prefix = (context === 'org' || context === 'orgcrafting') ? 'orgcraft' : 'craft';
+  const tabPrefix = (context === 'org' || context === 'orgcrafting') ? 'orgcraftab' : 'craftab';
   ['blueprints','planner','jobs','mining'].forEach(t => {
     const el = document.getElementById(prefix + '-tab-' + t);
     if (el) el.style.display = t === tab ? '' : 'none';
@@ -2843,7 +2843,7 @@ window.switchCraftTab = function(tab, context) {
 };
 
 window.initCraftingTab = function(context) {
-  const isOrg = context === 'org';
+  const isOrg = context === 'org' || context === 'orgcrafting';
   const data = window._blueprintData;
   const versionEl = document.getElementById(isOrg ? 'orgcrafting-version' : 'crafting-version');
   const listEl = document.getElementById(isOrg ? 'obp-list' : 'bp-list');
@@ -2870,7 +2870,7 @@ window.initCraftingTab = function(context) {
 };
 
 window.filterBlueprints = function(context) {
-  const isOrg = context === 'org';
+  const isOrg = context === 'org' || context === 'orgcrafting';
   const data = window._blueprintData;
   if (!data?.blueprints) return;
 
@@ -2952,7 +2952,7 @@ function getInventoryQuality(matName, isOrg) {
 }
 
 function renderBlueprintDetail(bp, context) {
-  const isOrg = context === 'org';
+  const isOrg = context === 'org' || context === 'orgcrafting';
   const tiers = bp.tiers || [];
   if (!tiers.length) return '<div style="font-size:11px;color:var(--text3);padding:8px 0">No tier data.</div>';
 
@@ -3062,7 +3062,7 @@ window.toggleBpDetail = function(id) {
 
 // ── Planner ──
 window.addBlueprintToPlanner = function(guid, context) {
-  const isOrg = context === 'org';
+  const isOrg = context === 'org' || context === 'orgcrafting';
   const data = window._blueprintData;
   if (!data) return;
   const bp = data.blueprints.find(b => b.guid === guid);
@@ -3083,7 +3083,7 @@ window.addBlueprintToPlanner = function(guid, context) {
 };
 
 window.plannerSearch = function(context) {
-  const isOrg = context === 'org';
+  const isOrg = context === 'org' || context === 'orgcrafting';
   const searchId = isOrg ? 'org-planner-search' : 'planner-search';
   const resultsId = isOrg ? 'org-planner-search-results' : 'planner-search-results';
   const q = document.getElementById(searchId)?.value.toLowerCase() || '';
@@ -3102,7 +3102,7 @@ window.plannerSearch = function(context) {
 };
 
 window.renderPlannerQueue = function(context) {
-  const isOrg = context === 'org';
+  const isOrg = context === 'org' || context === 'orgcrafting';
   const queue = isOrg ? window._orgCraftingQueue : window._craftingQueue;
   const qElId = isOrg ? 'org-planner-queue' : 'planner-queue';
   const actElId = isOrg ? 'org-planner-actions' : 'planner-actions';
@@ -3163,7 +3163,7 @@ function aggregateMaterials(queue) {
 }
 
 window.renderShoppingList = function(context) {
-  const isOrg = context === 'org';
+  const isOrg = context === 'org' || context === 'orgcrafting';
   const queue = isOrg ? window._orgCraftingQueue : window._craftingQueue;
   const el = document.getElementById(isOrg ? 'org-planner-shopping-list' : 'planner-shopping-list');
   if (!el) return;
@@ -3195,7 +3195,7 @@ window.renderShoppingList = function(context) {
 };
 
 window.createCraftingJob = async function(context) {
-  const isOrg = context === 'org';
+  const isOrg = context === 'org' || context === 'orgcrafting';
   const queue = isOrg ? window._orgCraftingQueue : window._craftingQueue;
   if (!queue.length) return;
   const name = prompt('Job name:', queue.map(i => i.name).join(', ').substring(0, 60));
@@ -3221,7 +3221,7 @@ window.createCraftingJob = async function(context) {
 
 // ── Crafting Jobs ──
 window.renderCraftingJobs = function(context) {
-  const isOrg = context === 'org';
+  const isOrg = context === 'org' || context === 'orgcrafting';
   const elId = isOrg ? 'orgCraftingJobsList' : 'craftingJobsList';
   const el = document.getElementById(elId);
   if (!el) return;
@@ -3285,7 +3285,7 @@ window.renderCraftingJobs = function(context) {
 };
 
 window.updateJobStatus = async function(dbPath, context, status) {
-  const isOrg = context === 'org';
+  const isOrg = context === 'org' || context === 'orgcrafting';
   const basePath = isOrg ? 'crafting_jobs/' : 'personal_crafting_jobs/';
   if (status === 'complete' && !isOrg) {
     // Show confirmation modal with adjustable deductions
@@ -3444,7 +3444,7 @@ window.refreshBlueprintData = async function() {
 
 // ── Mining Plan ──
 window.buildMiningPlan = function(context) {
-  const isOrg = context === 'org';
+  const isOrg = context === 'org' || context === 'orgcrafting';
   const elId = isOrg ? 'orgMiningPlanContent' : 'miningPlanContent';
   const el = document.getElementById(elId);
   if (!el) return;
