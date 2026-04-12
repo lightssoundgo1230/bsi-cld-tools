@@ -796,7 +796,9 @@ label { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: 
       <div class="section-title" style="margin-bottom:0;flex:1"><div class="dot" style="background:var(--accent)"></div> Org Crafting</div>
       <div style="display:flex;gap:10px;align-items:center">
         <span id="orgcrafting-version" style="font-size:10px;color:var(--text2);letter-spacing:1px"></span>
-        <button class="btn sm green" id="btn-refresh-blueprints" onclick="refreshBlueprintData()">↻ Refresh Data</button>
+        <button class="btn sm green" id="btn-refresh-blueprints" onclick="refreshBlueprintData()">↻ Blueprints</button>
+        <button class="btn sm" style="border-color:var(--accent);color:var(--accent)" id="btn-refresh-uex" onclick="refreshUexCatalog()">↻ Item Catalog</button>
+        <span id="uex-catalog-version" style="font-size:10px;color:var(--text2);letter-spacing:1px"></span>
       </div>
     </div>
     <div style="display:flex;gap:2px;margin-bottom:20px;border-bottom:1px solid var(--border)">
@@ -1103,6 +1105,7 @@ window.doLogin = async function() {
   } catch(e) { setMsg('loginErr', 'Connection error. Try again.'); return; }
 
   if (!member) { setMsg('loginErr', 'Username not found. Request access below.'); return; }
+  if (member.active === false) { setMsg('loginErr', 'Your account has been deactivated. Contact CLD Leadership to reactivate.'); return; }
   if (!member.passwordHash) { setMsg('loginErr', 'Account not yet set up. Contact leadership.'); return; }
 
   const hash = await hashPassword(password);
@@ -1263,6 +1266,7 @@ document.getElementById('loginUsername')?.addEventListener('keydown', e => { if 
 
     const member = snap.val();
     if (member.username !== username) { localStorage.removeItem('tbsi_session'); return; }
+    if (member.active === false) { localStorage.removeItem('tbsi_session'); return; }
 
     // Use role from Firebase (may have changed since last login)
     window._session = { username, role: member.role, memberId };
@@ -1354,6 +1358,17 @@ function loadAll() {
   });
   onValue(ref(db, 'config/uex_token'), snap => {
     if (snap.exists()) window._uexToken = snap.val();
+  });
+  onValue(ref(db, 'config/uex_catalog_cache'), snap => {
+    if (snap.exists()) {
+      const cached = snap.val();
+      window._uexItemCache = cached.items || [];
+      window._uexCommodityCache = cached.commodities || [];
+      window._uexCacheReady = true;
+      window._uexCacheLoading = false;
+      const verEl = document.getElementById('uex-catalog-version');
+      if (verEl) verEl.textContent = cached.cachedAt ? 'Items: ' + new Date(cached.cachedAt).toLocaleDateString() : '';
+    }
   });
   onValue(ref(db, 'config/blueprint_cache'), snap => {
     if (snap.exists()) {
@@ -1717,11 +1732,13 @@ window.showAddPersonalModal = function() {
         if (statusEl) statusEl.style.display = 'none';
         if (searchEl) { searchEl.disabled = false; searchEl.placeholder = 'Search Quantanium, Iron, armor...'; }
         document.getElementById('pm-search-status').textContent = '';
+      } else if (msg === 'no_cache') {
+        if (statusEl) { statusEl.className = 'notice warn'; statusEl.textContent = 'Item catalog not cached yet. Ask CLD Leadership to click ↻ Item Catalog in Org Crafting.'; }
       } else {
         if (statusEl) statusEl.textContent = msg;
       }
     }).catch(e => {
-      if (statusEl) { statusEl.className = 'notice error'; statusEl.textContent = 'UEX load failed: ' + e.message; }
+      if (statusEl) { statusEl.className = 'notice error'; statusEl.textContent = 'Catalog load failed: ' + e.message; }
     });
   } else {
     const searchEl = document.getElementById('pm-search');
@@ -1786,6 +1803,7 @@ window.submitPersonalHaul = async function() {
     materialName: name, qty, quality: qual, splittable, notes,
     loggedAt: Date.now()
   });
+  await loadPersonalInvCache();
   closeModalDirect();
   renderMyInventory();
 };
@@ -1867,6 +1885,7 @@ window.submitDonation = async function() {
 window.deletePersonalItem = async function(id) {
   if (!confirm('Remove this item from your inventory?')) return;
   await remove(ref(db, `personal_inventory/${window._session.memberId}/${id}`));
+  await loadPersonalInvCache();
   renderMyInventory();
 };
 
@@ -2314,48 +2333,81 @@ window._uexCacheLoading = false;
 window._uexCacheReady = false;
 
 async function loadUexCatalog(statusCallback) {
-  if (window._uexCacheReady) return;
+  // If already loaded from Firebase listener, we're done
+  if (window._uexCacheReady) {
+    if (statusCallback) statusCallback('ready');
+    return;
+  }
+  // If currently loading, wait for it
   if (window._uexCacheLoading) {
-    // Wait for existing load
     await new Promise(resolve => {
       const check = setInterval(() => {
         if (window._uexCacheReady) { clearInterval(check); resolve(); }
       }, 200);
     });
+    if (statusCallback) statusCallback('ready');
     return;
   }
-  window._uexCacheLoading = true;
+  // Try loading from Firebase cache first
+  if (statusCallback) statusCallback('Loading item catalog...');
   try {
-    // Fetch commodities (no params needed)
-    if (statusCallback) statusCallback('Loading commodities...');
-    const commodities = await uexGet('commodities');
-    window._uexCommodityCache = (commodities || []).map(c => ({ ...c, _type: 'commodity' }));
+    const snap = await withTimeout(get(ref(db, 'config/uex_catalog_cache')), 5000);
+    if (snap.exists()) {
+      const cached = snap.val();
+      window._uexItemCache = cached.items || [];
+      window._uexCommodityCache = cached.commodities || [];
+      window._uexCacheReady = true;
+      if (statusCallback) statusCallback('ready');
+      return;
+    }
+  } catch(e) { console.warn('Firebase catalog load failed:', e.message); }
 
-    // Fetch categories, then items per category
-    if (statusCallback) statusCallback('Loading item categories...');
+  // No Firebase cache — tell user to refresh via admin
+  if (statusCallback) statusCallback('no_cache');
+}
+
+// Called by the ↻ Item Catalog button (CLD/DoC only)
+window.refreshUexCatalog = async function() {
+  const btn = document.getElementById('btn-refresh-uex');
+  if (btn) { btn.textContent = '↻ Fetching...'; btn.disabled = true; }
+  try {
+    if (!window._uexToken) throw new Error('No UEX token set in Admin.');
+
+    if (btn) btn.textContent = '↻ Loading commodities...';
+    const commodities = (await uexGet('commodities')).map(c => ({ id: c.id, name: c.name, _type: 'commodity' }));
+
+    if (btn) btn.textContent = '↻ Loading categories...';
     const categories = await uexGet('categories');
     const allItems = [];
-    const catList = (categories || []).slice(0, 40); // cap to avoid quota burn
+    const catList = (categories || []).slice(0, 40);
     let done = 0;
     for (const cat of catList) {
       try {
-        if (statusCallback) statusCallback(`Loading items (${++done}/${catList.length})...`);
+        if (btn) btn.textContent = `↻ Items (${++done}/${catList.length})...`;
         const items = await uexGet('items', { id_category: cat.id });
-        (items || []).forEach(i => allItems.push({ ...i, category_name: cat.name, _type: 'item' }));
-      } catch(e) { /* skip failed categories */ }
+        (items || []).forEach(i => allItems.push({ id: i.id, name: i.name, category_name: cat.name, _type: 'item' }));
+      } catch(e) {}
     }
-    // Deduplicate by id
     const seen = new Set();
-    window._uexItemCache = allItems.filter(i => {
-      if (seen.has(i.id)) return false;
-      seen.add(i.id); return true;
-    });
+    const dedupedItems = allItems.filter(i => { if (seen.has(i.id)) return false; seen.add(i.id); return true; });
+
+    if (btn) btn.textContent = '↻ Saving...';
+    const toCache = { items: dedupedItems, commodities, cachedAt: Date.now(), cachedBy: window._session.username };
+    await set(ref(db, 'config/uex_catalog_cache'), toCache);
+
+    window._uexItemCache = dedupedItems;
+    window._uexCommodityCache = commodities;
     window._uexCacheReady = true;
-    if (statusCallback) statusCallback('ready');
+
+    const verEl = document.getElementById('uex-catalog-version');
+    if (verEl) verEl.textContent = 'Items: ' + new Date().toLocaleDateString();
+    alert('Item catalog saved — ' + dedupedItems.length + ' items + ' + commodities.length + ' commodities. Everyone will use this cache now.');
+  } catch(e) {
+    alert('Catalog refresh failed: ' + e.message);
   } finally {
-    window._uexCacheLoading = false;
+    if (btn) { btn.textContent = '↻ Item Catalog'; btn.disabled = false; }
   }
-}
+};
 
 function searchUexCached(query) {
   if (!window._uexCacheReady) return [];
@@ -2965,10 +3017,15 @@ window._personalInvCache = {};
 window._accessRequestsData = {};
 async function loadPersonalInvCache() {
   if (!window._session?.memberId) return;
-  try {
-    const snap = await get(ref(db, 'personal_inventory/' + window._session.memberId));
+  // Live listener — cache updates automatically whenever inventory changes
+  onValue(ref(db, 'personal_inventory/' + window._session.memberId), snap => {
     window._personalInvCache = snap.exists() ? snap.val() : {};
-  } catch(e) {}
+    // Re-render shopping list if planner is open
+    const plannerEl = document.getElementById('craft-tab-planner');
+    if (plannerEl && plannerEl.style.display !== 'none') renderShoppingList('personal');
+    const orgPlannerEl = document.getElementById('orgcraft-tab-planner');
+    if (orgPlannerEl && orgPlannerEl.style.display !== 'none') renderShoppingList('org');
+  });
 }
 
 window.toggleBpDetail = function(id) {
@@ -3359,29 +3416,61 @@ window.refreshBlueprintData = async function() {
 };
 
 // ── Admin ──
+const INACTIVE_DAYS = 90;
+
 window.renderAdmin = function() {
   if (!can('admin')) return;
   renderAdminRequests();
 
-  // Members list
   const members = Object.entries(window._membersData);
   const el = document.getElementById('adminMembers');
-  if (!members.length) { el.innerHTML = '<div class="empty">No enrolled members.</div>'; }
-  else el.innerHTML = `<table class="tbl"><thead><tr><th>Username</th><th>Role</th><th>Joined</th><th>Last Seen</th><th></th></tr></thead><tbody>` +
-    members.sort((a,b) => (b[1].lastSeen||0)-(a[1].lastSeen||0)).map(([id, m]) => `<tr>
-      <td>${m.username}</td>
+  if (!members.length) { el.innerHTML = '<div class="empty">No enrolled members.</div>'; return; }
+
+  const now = Date.now();
+  const inactiveThreshold = INACTIVE_DAYS * 24 * 60 * 60 * 1000;
+
+  // Auto-flag members who haven't been seen in 90 days (doesn't deactivate, just marks)
+  for (const [id, m] of members) {
+    if (m.active !== false && m.lastSeen && (now - m.lastSeen) > inactiveThreshold && m.username !== window._session?.username) {
+      update(ref(db, 'members/' + id), { flaggedInactive: true }).catch(() => {});
+    }
+  }
+
+  const active = members.filter(([,m]) => m.active !== false);
+  const inactive = members.filter(([,m]) => m.active === false);
+
+  function memberRow(id, m, isInactive) {
+    const daysSince = m.lastSeen ? Math.floor((now - m.lastSeen) / 86400000) : null;
+    const lastSeenColor = daysSince > INACTIVE_DAYS ? 'var(--red)' : daysSince > 60 ? 'var(--orange)' : 'var(--text2)';
+    const lastSeenStr = daysSince !== null ? tsToDate(m.lastSeen) + ` <span style="font-size:9px;color:${lastSeenColor}">(${daysSince}d ago)</span>` : '—';
+    const isSelf = m.username === window._session?.username;
+
+    return `<tr style="${isInactive ? 'opacity:0.5' : ''}">
+      <td>${m.username}${m.flaggedInactive && !isInactive ? ' <span class="tag" style="font-size:8px;background:var(--orange-dim);border:1px solid rgba(255,112,32,0.3);color:var(--orange)">INACTIVE</span>' : ''}</td>
       <td>
-        <select onchange="updateMemberRole('${id}', this.value)" style="font-size:10px;padding:3px 6px;background:var(--bg2);width:auto">
+        <select onchange="updateMemberRole('${id}', this.value)" style="font-size:10px;padding:3px 6px;background:var(--bg2);width:auto" ${isInactive ? 'disabled' : ''}>
           ${Object.entries(ROLE_LABELS).map(([k,v]) => `<option value="${k}" ${m.role===k?'selected':''}>${v}</option>`).join('')}
         </select>
       </td>
       <td style="color:var(--text2)">${tsToDate(m.joinedAt)}</td>
-      <td style="color:var(--text2)">${tsToDate(m.lastSeen)}</td>
-      <td style="display:flex;gap:6px">
-        <button class="btn sm orange" onclick="resetMemberPassword('${id}','${m.username}')">Reset PW</button>
-        ${m.username !== window._session?.username ? `<button class="btn sm red" onclick="revokeMember('${id}','${m.username}')">Revoke</button>` : ''}
+      <td>${lastSeenStr}</td>
+      <td style="display:flex;gap:6px;flex-wrap:wrap">
+        ${!isInactive ? `<button class="btn sm orange" onclick="resetMemberPassword('${id}','${m.username}')">Reset PW</button>` : ''}
+        ${!isSelf && !isInactive ? `<button class="btn sm" style="border-color:var(--orange);color:var(--orange)" onclick="deactivateMember('${id}','${m.username}')">Deactivate</button>` : ''}
+        ${isInactive ? `<button class="btn sm green" onclick="reactivateMember('${id}','${m.username}')">Reactivate</button>` : ''}
+        ${!isSelf ? `<button class="btn sm red" onclick="revokeMember('${id}','${m.username}')">Revoke</button>` : ''}
       </td>
-    </tr>`).join('') + '</tbody></table>';
+    </tr>`;
+  }
+
+  let html = `<table class="tbl"><thead><tr><th>Username</th><th>Role</th><th>Joined</th><th>Last Seen</th><th></th></tr></thead><tbody>`;
+  html += active.sort((a,b) => (b[1].lastSeen||0)-(a[1].lastSeen||0)).map(([id,m]) => memberRow(id, m, false)).join('');
+  if (inactive.length) {
+    html += `<tr><td colspan="5" style="font-size:9px;letter-spacing:2px;color:var(--text3);text-transform:uppercase;padding:12px 12px 6px;border-top:1px solid var(--border)">Deactivated Members</td></tr>`;
+    html += inactive.map(([id,m]) => memberRow(id, m, true)).join('');
+  }
+  html += '</tbody></table>';
+  el.innerHTML = html;
 
   // UEX token
   const tokenInput = document.getElementById('uex-token-input');
@@ -3482,6 +3571,16 @@ window.saveUexToken = async function() {
 window.toggleUexTokenVisibility = function() {
   const el = document.getElementById('uex-token-input');
   if (el) el.type = el.type === 'password' ? 'text' : 'password';
+};
+
+window.deactivateMember = async function(id, username) {
+  if (!confirm('Deactivate ' + username + '? They will be unable to log in but their data is preserved.')) return;
+  await update(ref(db, 'members/' + id), { active: false, deactivatedAt: Date.now(), deactivatedBy: window._session.username });
+};
+
+window.reactivateMember = async function(id, username) {
+  if (!confirm('Reactivate ' + username + '? They will be able to log in again.')) return;
+  await update(ref(db, 'members/' + id), { active: true, reactivatedAt: Date.now(), reactivatedBy: window._session.username, flaggedInactive: false });
 };
 
 window.revokeMember = async function(id, username) {
