@@ -1,0 +1,1448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TBSI — CLD Operations</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #060a0f;
+  --bg2: #0a1018;
+  --panel: #0d1520;
+  --panel2: #111d2a;
+  --border: #1a2d3f;
+  --border2: #243d52;
+  --accent: #00c8f0;
+  --accent-dim: rgba(0,200,240,0.15);
+  --orange: #ff7020;
+  --orange-dim: rgba(255,112,32,0.15);
+  --green: #00e898;
+  --green-dim: rgba(0,232,152,0.12);
+  --purple: #a060ff;
+  --purple-dim: rgba(160,96,255,0.12);
+  --red: #ff3c50;
+  --red-dim: rgba(255,60,80,0.12);
+  --gold: #ffc040;
+  --gold-dim: rgba(255,192,64,0.12);
+  --text: #b8ccd8;
+  --text2: #6a8898;
+  --text3: #3a5060;
+  --glow: 0 0 16px rgba(0,200,240,0.3);
+  --glow-o: 0 0 16px rgba(255,112,32,0.3);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Share Tech Mono', monospace;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Scanline overlay */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px);
+  pointer-events: none;
+  z-index: 9999;
+}
+
+/* Grid bg */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background:
+    repeating-linear-gradient(0deg, transparent, transparent 48px, rgba(0,200,240,0.018) 48px, rgba(0,200,240,0.018) 49px),
+    repeating-linear-gradient(90deg, transparent, transparent 48px, rgba(0,200,240,0.018) 48px, rgba(0,200,240,0.018) 49px);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ── LOGIN SCREEN ── */
+#loginScreen {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  background: var(--bg);
+}
+
+.login-box {
+  width: 420px;
+  background: var(--panel);
+  border: 1px solid var(--border2);
+  padding: 40px;
+  position: relative;
+  animation: fadeIn 0.4s ease;
+}
+
+.login-box::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(to right, transparent, var(--accent), transparent);
+}
+
+@keyframes fadeIn { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+
+.login-logo {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 28px;
+  font-weight: 900;
+  color: var(--accent);
+  text-shadow: var(--glow);
+  letter-spacing: 4px;
+  margin-bottom: 4px;
+}
+
+.login-sub {
+  font-size: 10px;
+  color: var(--text2);
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  margin-bottom: 32px;
+}
+
+.login-err {
+  background: var(--red-dim);
+  border: 1px solid rgba(255,60,80,0.3);
+  color: var(--red);
+  font-size: 11px;
+  padding: 8px 12px;
+  margin-bottom: 16px;
+  display: none;
+  letter-spacing: 1px;
+}
+
+/* ── APP SHELL ── */
+#app { display: none; position: relative; z-index: 1; min-height: 100vh; }
+
+/* ── TOPBAR ── */
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 14px 28px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(6,10,15,0.9);
+  backdrop-filter: blur(8px);
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+
+.topbar-logo {
+  font-family: 'Orbitron', sans-serif;
+  font-weight: 900;
+  font-size: 16px;
+  color: var(--accent);
+  text-shadow: var(--glow);
+  letter-spacing: 3px;
+  flex-shrink: 0;
+}
+
+.topbar-divider { width: 1px; height: 24px; background: var(--border); flex-shrink: 0; }
+
+.nav-tabs { display: flex; gap: 2px; flex: 1; }
+
+.nav-tab {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  padding: 8px 16px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text2);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.nav-tab:hover { color: var(--text); border-color: var(--border); }
+
+.nav-tab.active {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+
+.nav-tab.locked { opacity: 0.3; cursor: not-allowed; }
+
+.topbar-user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.user-badge {
+  font-size: 9px;
+  letter-spacing: 2px;
+  padding: 4px 10px;
+  border-radius: 2px;
+  text-transform: uppercase;
+}
+
+.topbar-logout {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text2);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 10px;
+  padding: 5px 12px;
+  cursor: pointer;
+  letter-spacing: 1px;
+  transition: all 0.2s;
+}
+.topbar-logout:hover { border-color: var(--red); color: var(--red); }
+
+/* ── PAGE CONTENT ── */
+.page { display: none; padding: 28px; max-width: 1400px; margin: 0 auto; }
+.page.active { display: block; animation: fadeIn 0.25s ease; }
+
+/* ── SHARED COMPONENTS ── */
+.section-title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+.section-title::after { content: ''; flex: 1; height: 1px; background: linear-gradient(to right, var(--border), transparent); }
+.dot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
+
+input, textarea, select {
+  background: rgba(0,0,0,0.4);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 12px;
+  padding: 9px 12px;
+  width: 100%;
+  outline: none;
+  transition: border-color 0.2s;
+  border-radius: 1px;
+}
+input:focus, textarea:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 1px rgba(0,200,240,0.1); }
+select option { background: var(--panel); }
+label { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--text2); display: block; margin-bottom: 5px; }
+.field { margin-bottom: 14px; }
+
+.btn {
+  background: transparent;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  font-family: 'Orbitron', sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  padding: 9px 20px;
+  cursor: pointer;
+  text-transform: uppercase;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+.btn:hover { background: var(--accent-dim); box-shadow: var(--glow); }
+.btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.btn.orange { border-color: var(--orange); color: var(--orange); }
+.btn.orange:hover { background: var(--orange-dim); box-shadow: var(--glow-o); }
+.btn.green { border-color: var(--green); color: var(--green); }
+.btn.green:hover { background: var(--green-dim); }
+.btn.red { border-color: var(--red); color: var(--red); }
+.btn.red:hover { background: var(--red-dim); }
+.btn.gold { border-color: var(--gold); color: var(--gold); }
+.btn.gold:hover { background: var(--gold-dim); }
+.btn.sm { font-size: 9px; padding: 5px 12px; }
+.btn-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+
+.card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  padding: 20px;
+  margin-bottom: 16px;
+  position: relative;
+}
+.card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(to right, var(--accent), transparent);
+  opacity: 0.4;
+}
+
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+.grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+
+.notice { font-size: 11px; padding: 10px 14px; border-radius: 1px; margin-bottom: 12px; line-height: 1.6; letter-spacing: 0.5px; }
+.notice.info { background: var(--accent-dim); border: 1px solid rgba(0,200,240,0.2); color: var(--accent); }
+.notice.warn { background: var(--orange-dim); border: 1px solid rgba(255,112,32,0.25); color: var(--orange); }
+.notice.success { background: var(--green-dim); border: 1px solid rgba(0,232,152,0.25); color: var(--green); }
+.notice.error { background: var(--red-dim); border: 1px solid rgba(255,60,80,0.25); color: var(--red); }
+
+.tag {
+  display: inline-block;
+  font-size: 9px;
+  padding: 2px 8px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  border-radius: 1px;
+}
+
+/* Quality bar */
+.qual-wrap { display: flex; align-items: center; gap: 8px; }
+.qual-bar { height: 4px; background: var(--border); border-radius: 2px; flex: 1; overflow: hidden; }
+.qual-fill { height: 100%; border-radius: 2px; transition: width 0.3s; }
+.qual-label { font-size: 10px; min-width: 32px; text-align: right; }
+
+/* Table */
+.tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
+.tbl th { font-family: 'Orbitron', sans-serif; font-size: 9px; letter-spacing: 2px; color: var(--text2); text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+.tbl td { padding: 9px 12px; border-bottom: 1px solid rgba(26,45,63,0.5); vertical-align: middle; }
+.tbl tr:hover td { background: rgba(0,200,240,0.025); }
+.tbl tr:last-child td { border-bottom: none; }
+
+.empty { text-align: center; color: var(--text3); padding: 40px; font-size: 12px; letter-spacing: 1px; }
+
+/* Stat boxes */
+.stat-box { background: var(--panel); border: 1px solid var(--border); padding: 14px 18px; }
+.stat-val { font-family: 'Orbitron', sans-serif; font-size: 22px; color: var(--accent); }
+.stat-label { font-size: 9px; color: var(--text2); letter-spacing: 2px; text-transform: uppercase; margin-top: 3px; }
+
+/* Share bar */
+.share-bar-wrap { display: flex; align-items: center; gap: 8px; }
+.share-bar { height: 5px; background: var(--border); border-radius: 3px; flex: 1; overflow: hidden; }
+.share-bar-fill { height: 100%; border-radius: 3px; background: linear-gradient(to right, var(--accent), var(--green)); }
+.share-pct { font-size: 11px; color: var(--accent); min-width: 34px; text-align: right; }
+
+/* Modal */
+.modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.7);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 200;
+  backdrop-filter: blur(4px);
+}
+.modal {
+  background: var(--panel);
+  border: 1px solid var(--border2);
+  padding: 28px;
+  width: 560px;
+  max-width: 95vw;
+  max-height: 90vh;
+  overflow-y: auto;
+  position: relative;
+  animation: fadeIn 0.2s ease;
+}
+.modal::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0; height: 2px;
+  background: linear-gradient(to right, var(--orange), transparent);
+}
+.modal-title { font-family: 'Orbitron', sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 3px; color: var(--orange); margin-bottom: 20px; }
+.modal-close { position: absolute; top: 16px; right: 16px; background: none; border: none; color: var(--text2); font-size: 18px; cursor: pointer; line-height: 1; }
+.modal-close:hover { color: var(--red); }
+
+/* Review stage */
+.review-member { background: var(--panel2); border: 1px solid var(--border); padding: 14px 16px; margin-bottom: 10px; }
+.review-member-header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.review-member-name { font-family: 'Orbitron', sans-serif; font-size: 11px; flex: 1; }
+.review-alloc-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.review-alloc-row label { margin: 0; min-width: 120px; flex-shrink: 0; }
+.review-alloc-row input { flex: 1; }
+
+/* Phase indicators */
+.phase-track { display: flex; align-items: center; gap: 0; margin-bottom: 24px; }
+.phase-step { display: flex; align-items: center; gap: 10px; }
+.phase-dot { width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--border); display: flex; align-items: center; justify-content: center; font-family: 'Orbitron', sans-serif; font-size: 10px; font-weight: 600; color: var(--text2); flex-shrink: 0; }
+.phase-dot.done { border-color: var(--green); color: var(--green); background: var(--green-dim); }
+.phase-dot.active { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+.phase-label { font-size: 10px; letter-spacing: 1px; color: var(--text2); white-space: nowrap; }
+.phase-line { flex: 1; height: 1px; background: var(--border); min-width: 20px; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+@media (max-width: 900px) {
+  .grid2, .grid3, .grid4 { grid-template-columns: 1fr; }
+  .topbar { padding: 12px 16px; gap: 12px; }
+  .page { padding: 16px; }
+}
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════
+     LOGIN SCREEN
+══════════════════════════════════════════ -->
+<div id="loginScreen">
+  <div class="login-box">
+    <div class="login-logo">TBSI</div>
+    <div class="login-sub">Commerce &amp; Logistics Division</div>
+    <div class="login-err" id="loginErr">Invalid credentials. Check your invite code.</div>
+    <div class="field">
+      <label>Discord Username</label>
+      <input type="text" id="loginUsername" placeholder="YourUsername" autocomplete="off">
+    </div>
+    <div class="field">
+      <label>Invite Code</label>
+      <input type="text" id="loginCode" placeholder="XXXX-XXXX-XXXX" autocomplete="off" style="letter-spacing:2px">
+    </div>
+    <div class="btn-row">
+      <button class="btn" onclick="doLogin()" style="flex:1">Authenticate</button>
+    </div>
+    <div style="margin-top:16px;font-size:10px;color:var(--text3);line-height:1.6">
+      Contact CLD Leadership for your invite code.<br>
+      Unauthorized access is logged.
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     APP
+══════════════════════════════════════════ -->
+<div id="app">
+  <div class="topbar">
+    <div class="topbar-logo">TBSI · CLD</div>
+    <div class="topbar-divider"></div>
+    <div class="nav-tabs">
+      <button class="nav-tab active" onclick="showPage('dashboard')">Dashboard</button>
+      <button class="nav-tab" onclick="showPage('events')" id="tab-events">Events</button>
+      <button class="nav-tab" onclick="showPage('myinv')" id="tab-myinv">My Inventory</button>
+      <button class="nav-tab locked" id="tab-orgbank" onclick="showPage('orgbank')">Org Bank</button>
+      <button class="nav-tab locked" id="tab-admin" onclick="showPage('admin')">Admin</button>
+    </div>
+    <div class="topbar-user">
+      <span id="topbarUsername" style="font-size:11px;color:var(--text2)"></span>
+      <span id="topbarBadge" class="user-badge tag"></span>
+      <button class="topbar-logout" onclick="doLogout()">Logout</button>
+    </div>
+  </div>
+
+  <!-- DASHBOARD -->
+  <div class="page active" id="page-dashboard">
+    <div class="section-title"><div class="dot" style="background:var(--accent)"></div> Operations Overview</div>
+    <div class="grid4" id="dashStats" style="margin-bottom:24px">
+      <div class="stat-box"><div class="stat-val" id="ds-events">—</div><div class="stat-label">Total Events</div></div>
+      <div class="stat-box"><div class="stat-val" id="ds-members">—</div><div class="stat-label">Active Members</div></div>
+      <div class="stat-box"><div class="stat-val" id="ds-pending">—</div><div class="stat-label">Pending Distros</div></div>
+      <div class="stat-box" id="ds-bank-box" style="display:none"><div class="stat-val" id="ds-bank">—</div><div class="stat-label">Bank Entries</div></div>
+    </div>
+    <div class="grid2">
+      <div>
+        <div class="section-title" style="font-size:9px"><div class="dot" style="background:var(--orange)"></div> Recent Events</div>
+        <div id="dashEvents"><div class="empty">No events yet.</div></div>
+      </div>
+      <div>
+        <div class="section-title" style="font-size:9px"><div class="dot" style="background:var(--green)"></div> Donation Requests</div>
+        <div id="dashDonations"><div class="empty">No pending donations.</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- EVENTS -->
+  <div class="page" id="page-events">
+    <div id="eventsMain">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+        <div class="section-title" style="margin-bottom:0;flex:1"><div class="dot" style="background:var(--accent)"></div> Events</div>
+        <button class="btn orange" onclick="showNewEvent()" id="btn-new-event">+ New Event</button>
+      </div>
+      <div id="eventsList"><div class="empty">No events logged.</div></div>
+    </div>
+
+    <!-- NEW EVENT FORM -->
+    <div id="newEventForm" style="display:none">
+      <div style="display:flex;align-items:center;gap:16px;margin-bottom:24px">
+        <button class="btn sm" onclick="cancelNewEvent()">← Back</button>
+        <div class="section-title" style="margin-bottom:0;flex:1"><div class="dot" style="background:var(--orange)"></div> New Event</div>
+      </div>
+
+      <!-- Phase tracker -->
+      <div class="phase-track" id="phaseTrack">
+        <div class="phase-step">
+          <div class="phase-dot active" id="ph1">1</div>
+          <div class="phase-label">Setup</div>
+        </div>
+        <div class="phase-line"></div>
+        <div class="phase-step">
+          <div class="phase-dot" id="ph2">2</div>
+          <div class="phase-label">Attendance</div>
+        </div>
+        <div class="phase-line"></div>
+        <div class="phase-step">
+          <div class="phase-dot" id="ph3">3</div>
+          <div class="phase-label">Materials</div>
+        </div>
+        <div class="phase-line"></div>
+        <div class="phase-step">
+          <div class="phase-dot" id="ph4">4</div>
+          <div class="phase-label">Review</div>
+        </div>
+        <div class="phase-line"></div>
+        <div class="phase-step">
+          <div class="phase-dot" id="ph5">5</div>
+          <div class="phase-label">Publish</div>
+        </div>
+      </div>
+
+      <!-- Phase 1: Setup -->
+      <div id="evPhase1">
+        <div class="card">
+          <div class="field"><label>Event Name</label><input type="text" id="evName" placeholder="Rock Breaker: Shared Co-Op"></div>
+          <div class="grid2">
+            <div class="field"><label>Event Type</label>
+              <select id="evType">
+                <option>Mining</option>
+                <option>Salvage</option>
+                <option>Hauling</option>
+                <option>Mixed</option>
+              </select>
+            </div>
+            <div class="field"><label>Full Share Threshold (minutes)</label>
+              <input type="number" id="evThreshold" value="30" min="5" max="240">
+            </div>
+          </div>
+          <div class="field"><label>Notes (optional)</label><textarea id="evNotes" style="min-height:60px" placeholder="Staging from CRU-L1..."></textarea></div>
+          <div class="btn-row"><button class="btn" onclick="evPhase(2)">Next: Attendance →</button></div>
+        </div>
+      </div>
+
+      <!-- Phase 2: Attendance -->
+      <div id="evPhase2" style="display:none">
+        <div class="card">
+          <div class="notice info">Paste the bot log output below. Format: <code>Role. DisplayName|Username|&lt;@ID&gt;|DUR:H:MM:SS</code></div>
+          <div class="field" style="margin-top:12px"><label>Bot Log</label>
+            <textarea id="evBotLog" style="min-height:200px" placeholder="SM 1st. Arkguil84 (Ark)|Arkguil84|&lt;@735690937577242646&gt;|DUR:4:17:48&#10;Mgr. ShadowWolf100|ShadowWolf100|&lt;@251008521456451584&gt;|DUR:0:09:37"></textarea>
+          </div>
+          <div class="btn-row">
+            <button class="btn sm" onclick="evPhase(1)">← Back</button>
+            <button class="btn" onclick="parseAttendance()">Parse &amp; Continue →</button>
+          </div>
+        </div>
+        <div id="attPreview" style="display:none">
+          <div class="section-title" style="font-size:9px;margin-top:16px"><div class="dot" style="background:var(--green)"></div> Parsed Attendance</div>
+          <div style="overflow-x:auto"><table class="tbl" id="attTable">
+            <thead><tr><th>Display Name</th><th>Username</th><th>Role</th><th>Duration</th><th>Share Weight</th></tr></thead>
+            <tbody id="attBody"></tbody>
+          </table></div>
+          <div class="btn-row" style="margin-top:16px">
+            <button class="btn orange" onclick="evPhase(3)">Next: Materials →</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Phase 3: Materials -->
+      <div id="evPhase3" style="display:none">
+        <div class="card">
+          <div class="section-title" style="font-size:9px"><div class="dot" style="background:var(--orange)"></div> Add Material</div>
+          <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr auto;gap:10px;align-items:end">
+            <div class="field" style="margin:0"><label>Material Name</label><input type="text" id="matName" placeholder="Quantanium"></div>
+            <div class="field" style="margin:0"><label>Quantity</label><input type="number" id="matQty" placeholder="12" min="0.01" step="0.01"></div>
+            <div class="field" style="margin:0"><label>Quality (1-999)</label><input type="number" id="matQual" placeholder="500" min="1" max="999"></div>
+            <div class="field" style="margin:0"><label>Splittable?</label>
+              <select id="matSplit"><option value="yes">Yes (gems)</option><option value="no">No (whole units)</option></select>
+            </div>
+            <button class="btn orange" style="height:36px;padding:0 16px;margin-bottom:0" onclick="addMaterial()">+</button>
+          </div>
+          <div id="matListEv" style="margin-top:16px"></div>
+          <div class="btn-row">
+            <button class="btn sm" onclick="evPhase(2)">← Back</button>
+            <button class="btn orange" onclick="evPhase(4)" id="btn-to-review">Next: Review →</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Phase 4: Review & Edit -->
+      <div id="evPhase4" style="display:none">
+        <div class="card">
+          <div class="notice warn">⚠ Review and adjust allocations before publishing. Changes here are final once published.</div>
+          <div id="reviewContent"></div>
+          <div class="btn-row">
+            <button class="btn sm" onclick="evPhase(3)">← Back</button>
+            <button class="btn gold" onclick="publishEvent()">Publish &amp; Send to Org Bank →</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Phase 5: Done -->
+      <div id="evPhase5" style="display:none">
+        <div class="card" style="text-align:center;padding:48px">
+          <div style="font-family:'Orbitron',sans-serif;font-size:14px;color:var(--green);letter-spacing:3px;margin-bottom:12px">EVENT PUBLISHED</div>
+          <div style="color:var(--text2);font-size:12px;margin-bottom:24px">Materials logged to Org Bank. Allocations distributed.</div>
+          <button class="btn green" onclick="cancelNewEvent()">← Back to Events</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MY INVENTORY -->
+  <div class="page" id="page-myinv">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+      <div class="section-title" style="margin-bottom:0;flex:1"><div class="dot" style="background:var(--green)"></div> My Inventory</div>
+      <button class="btn green" onclick="showAddPersonalModal()">+ Log Haul</button>
+    </div>
+    <div class="notice info" style="margin-bottom:20px">Your personal inventory is private. Only you and CLD Leadership can view it. Materials here are <strong>yours</strong> and never automatically added to the Org Bank.</div>
+    <div id="myInvContent"><div class="empty">No personal hauls logged.</div></div>
+    <div id="myDonationSection" style="margin-top:28px">
+      <div class="section-title" style="font-size:9px"><div class="dot" style="background:var(--purple)"></div> Donation Requests</div>
+      <div id="myDonationContent"><div class="empty">No pending donation requests.</div></div>
+    </div>
+  </div>
+
+  <!-- ORG BANK (leadership only) -->
+  <div class="page" id="page-orgbank">
+    <div class="section-title"><div class="dot" style="background:var(--gold)"></div> Org Bank</div>
+    <div class="notice warn" id="orgbank-readonly-notice" style="display:none">You have view-only access to the Org Bank.</div>
+    <div class="grid4" style="margin-bottom:24px">
+      <div class="stat-box"><div class="stat-val" id="ob-total">—</div><div class="stat-label">Total Entries</div></div>
+      <div class="stat-box"><div class="stat-val" id="ob-undist">—</div><div class="stat-label">Undistributed</div></div>
+      <div class="stat-box"><div class="stat-val" id="ob-members">—</div><div class="stat-label">Contributors</div></div>
+      <div class="stat-box"><div class="stat-val" id="ob-events">—</div><div class="stat-label">Events</div></div>
+    </div>
+    <div style="margin-bottom:18px;display:flex;gap:10px;flex-wrap:wrap">
+      <input type="text" id="ob-filter" placeholder="Filter by material or member..." style="max-width:320px" oninput="renderOrgBank()">
+      <select id="ob-status-filter" style="max-width:160px" onchange="renderOrgBank()">
+        <option value="">All Status</option>
+        <option value="undistributed">Undistributed</option>
+        <option value="distributed">Distributed</option>
+        <option value="committed">Committed</option>
+        <option value="spent">Spent</option>
+      </select>
+    </div>
+    <div style="overflow-x:auto">
+      <table class="tbl">
+        <thead><tr><th>Material</th><th>Qty</th><th>Quality</th><th>Grade</th><th>Custodian</th><th>Source Event</th><th>Status</th><th>Logged</th><th id="ob-actions-th"></th></tr></thead>
+        <tbody id="obBody"></tbody>
+      </table>
+    </div>
+    <div id="donationReviewSection" style="margin-top:28px;display:none">
+      <div class="section-title" style="font-size:9px"><div class="dot" style="background:var(--purple)"></div> Pending Donation Requests</div>
+      <div id="donationReviewContent"></div>
+    </div>
+  </div>
+
+  <!-- ADMIN (CLD Leadership only) -->
+  <div class="page" id="page-admin">
+    <div class="section-title"><div class="dot" style="background:var(--red)"></div> Admin Panel</div>
+    <div class="grid2">
+      <div>
+        <div class="section-title" style="font-size:9px"><div class="dot" style="background:var(--accent)"></div> Enrolled Members</div>
+        <div id="adminMembers"><div class="empty">Loading...</div></div>
+      </div>
+      <div>
+        <div class="section-title" style="font-size:9px"><div class="dot" style="background:var(--orange)"></div> Invite Codes</div>
+        <div class="card">
+          <div class="notice warn" style="margin-bottom:16px">Keep these confidential. Changing a code immediately invalidates the old one.</div>
+          <div id="adminCodes"><div class="empty">Loading...</div></div>
+          <div class="btn-row"><button class="btn orange" onclick="saveInviteCodes()">Save Codes</button></div>
+        </div>
+      </div>
+    </div>
+    <div style="margin-top:24px">
+      <div class="section-title" style="font-size:9px"><div class="dot" style="background:var(--red)"></div> Danger Zone</div>
+      <div class="card">
+        <div style="font-size:11px;color:var(--text2);margin-bottom:12px">Revoke member access by removing their entry. They will be unable to log in until re-enrolled.</div>
+        <div id="adminRevokeList"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODALS -->
+<div id="modalOverlay" style="display:none" class="modal-overlay" onclick="closeModal(event)">
+  <div class="modal" id="modalBox">
+    <button class="modal-close" onclick="closeModalDirect()">×</button>
+    <div class="modal-title" id="modalTitle"></div>
+    <div id="modalBody"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     FIREBASE + APP LOGIC
+══════════════════════════════════════════ -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js";
+import { getDatabase, ref, set, get, push, update, remove, onValue, serverTimestamp }
+  from "https://www.gstatic.com/firebasejs/12.12.0/firebase-database.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDSrEDD4A5NOWMeln4lvSxNfV53AReTiE4",
+  authDomain: "cld-mining-tools.firebaseapp.com",
+  databaseURL: "https://cld-mining-tools-default-rtdb.firebaseio.com",
+  projectId: "cld-mining-tools",
+  storageBucket: "cld-mining-tools.firebasestorage.app",
+  messagingSenderId: "992453701640",
+  appId: "1:992453701640:web:88b5badb45681361ce21bd"
+};
+
+const fbApp = initializeApp(firebaseConfig);
+const db = getDatabase(fbApp);
+
+// ── Default invite codes (stored in Firebase, overridable by admin) ──
+const DEFAULT_CODES = {
+  member:           'YL7I-H7W4-7D5L',
+  event_organizer:  '0XKZ-YQ34-LIKL',
+  general_leadership: 'N8F7-0G8B-I5SX',
+  cld_leadership:   'L4KR-TD36-2254'
+};
+
+const ROLE_LABELS = {
+  member: 'Member',
+  event_organizer: 'Event Organizer',
+  general_leadership: 'Gen. Leadership',
+  cld_leadership: 'CLD Leadership'
+};
+
+const ROLE_COLORS = {
+  member: 'var(--text2)',
+  event_organizer: 'var(--accent)',
+  general_leadership: 'var(--purple)',
+  cld_leadership: 'var(--gold)'
+};
+
+const QUALITY_GRADES = [
+  { max: 249,  label: 'Low',      color: 'var(--text2)' },
+  { max: 499,  label: 'Standard', color: 'var(--accent)' },
+  { max: 749,  label: 'High',     color: 'var(--orange)' },
+  { max: 999,  label: 'Prime',    color: 'var(--green)' }
+];
+
+// ── State ──
+window._session = null; // { username, role, memberId }
+window._evAttendance = [];
+window._evMaterials = [];
+window._evAllocations = {}; // memberUsername -> { matName: qty }
+window._orgBankData = {};
+window._membersData = {};
+window._eventsData = {};
+window._donationsData = {};
+window._currentCodes = { ...DEFAULT_CODES };
+
+// ── Helpers ──
+function qualGrade(q) {
+  return QUALITY_GRADES.find(g => q <= g.max) || QUALITY_GRADES[3];
+}
+
+function qualBarHtml(q) {
+  const g = qualGrade(q);
+  const pct = Math.round((q / 999) * 100);
+  return `<div class="qual-wrap">
+    <div class="qual-bar"><div class="qual-fill" style="width:${pct}%;background:${g.color}"></div></div>
+    <span class="qual-label" style="color:${g.color}">${q}</span>
+  </div>`;
+}
+
+function gradeBadge(q) {
+  const g = qualGrade(q);
+  return `<span class="tag" style="background:${g.color}22;border:1px solid ${g.color}44;color:${g.color}">${g.label}</span>`;
+}
+
+function roleBadgeHtml(role) {
+  const c = ROLE_COLORS[role] || 'var(--text2)';
+  const l = ROLE_LABELS[role] || role;
+  return `<span class="tag" style="background:${c}22;border:1px solid ${c}44;color:${c}">${l}</span>`;
+}
+
+function statusBadge(s) {
+  const map = {
+    undistributed: ['var(--orange)', 'UNDISTRIBUTED'],
+    distributed: ['var(--green)', 'DISTRIBUTED'],
+    committed: ['var(--accent)', 'COMMITTED'],
+    spent: ['var(--text3)', 'SPENT']
+  };
+  const [c, l] = map[s] || ['var(--text2)', s.toUpperCase()];
+  return `<span class="tag" style="background:${c}22;border:1px solid ${c}44;color:${c}">${l}</span>`;
+}
+
+function tsToDate(ts) {
+  if (!ts) return '—';
+  return new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function parseDuration(dur) {
+  const parts = dur.split(':').map(Number);
+  if (parts.length === 3) return parts[0] * 60 + parts[1] + parts[2] / 60;
+  if (parts.length === 2) return parts[0] * 60 + parts[1];
+  return 0;
+}
+
+function fmtDur(mins) {
+  const h = Math.floor(mins / 60);
+  const m = Math.floor(mins % 60);
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
+function can(action) {
+  const r = window._session?.role;
+  switch (action) {
+    case 'run_event': return ['event_organizer','cld_leadership'].includes(r);
+    case 'view_orgbank': return ['general_leadership','cld_leadership'].includes(r);
+    case 'edit_orgbank': return r === 'cld_leadership';
+    case 'admin': return r === 'cld_leadership';
+  }
+  return false;
+}
+
+// ── Login ──
+window.doLogin = async function() {
+  const username = document.getElementById('loginUsername').value.trim();
+  const code = document.getElementById('loginCode').value.trim().toUpperCase();
+  const err = document.getElementById('loginErr');
+  err.style.display = 'none';
+
+  if (!username || !code) { err.style.display = ''; err.textContent = 'Enter your Discord username and invite code.'; return; }
+
+  // Load codes from Firebase (fall back to defaults)
+  let codes = { ...DEFAULT_CODES };
+  try {
+    const snap = await get(ref(db, 'config/invite_codes'));
+    if (snap.exists()) codes = snap.val();
+  } catch(e) {}
+
+  let role = null;
+  for (const [r, c] of Object.entries(codes)) {
+    if (c === code) { role = r; break; }
+  }
+
+  if (!role) { err.style.display = ''; return; }
+
+  // Register / update member
+  const membersSnap = await get(ref(db, 'members'));
+  let memberId = null;
+  if (membersSnap.exists()) {
+    const members = membersSnap.val();
+    for (const [id, m] of Object.entries(members)) {
+      if (m.username === username) { memberId = id; break; }
+    }
+  }
+
+  if (!memberId) {
+    const newRef = push(ref(db, 'members'));
+    memberId = newRef.key;
+    await set(newRef, { username, role, joinedAt: Date.now(), lastSeen: Date.now() });
+  } else {
+    await update(ref(db, `members/${memberId}`), { role, lastSeen: Date.now() });
+  }
+
+  window._session = { username, role, memberId };
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('app').style.display = '';
+  setupUI();
+  loadAll();
+};
+
+window.doLogout = function() {
+  window._session = null;
+  document.getElementById('loginScreen').style.display = 'flex';
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('loginCode').value = '';
+  document.getElementById('loginUsername').value = '';
+  document.getElementById('loginErr').style.display = 'none';
+};
+
+// Enter key on login
+document.getElementById('loginCode').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+
+// ── UI Setup based on role ──
+function setupUI() {
+  const s = window._session;
+  document.getElementById('topbarUsername').textContent = s.username;
+  document.getElementById('topbarBadge').innerHTML = roleBadgeHtml(s.role);
+
+  if (can('run_event')) document.getElementById('tab-events').classList.remove('locked');
+  if (can('view_orgbank')) {
+    document.getElementById('tab-orgbank').classList.remove('locked');
+    document.getElementById('ds-bank-box').style.display = '';
+  }
+  if (can('admin')) document.getElementById('tab-admin').classList.remove('locked');
+}
+
+// ── Navigation ──
+window.showPage = function(page) {
+  const locked = { orgbank: !can('view_orgbank'), admin: !can('admin') };
+  if (locked[page]) return;
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('page-' + page).classList.add('active');
+  event?.target?.classList.add('active');
+  // Refresh data on navigate
+  if (page === 'orgbank') renderOrgBank();
+  if (page === 'myinv') renderMyInventory();
+  if (page === 'admin') renderAdmin();
+  if (page === 'dashboard') renderDashboard();
+};
+
+// ── Load all data ──
+function loadAll() {
+  onValue(ref(db, 'members'), snap => {
+    window._membersData = snap.val() || {};
+    renderDashboard();
+    if (document.getElementById('page-admin').classList.contains('active')) renderAdmin();
+  });
+  onValue(ref(db, 'events'), snap => {
+    window._eventsData = snap.val() || {};
+    renderDashboard();
+    renderEventsList();
+  });
+  onValue(ref(db, 'org_bank'), snap => {
+    window._orgBankData = snap.val() || {};
+    if (document.getElementById('page-orgbank').classList.contains('active')) renderOrgBank();
+    renderDashboard();
+  });
+  onValue(ref(db, 'donations'), snap => {
+    window._donationsData = snap.val() || {};
+    if (document.getElementById('page-myinv').classList.contains('active')) renderMyInventory();
+    renderDashboard();
+  });
+  onValue(ref(db, 'config/invite_codes'), snap => {
+    if (snap.exists()) window._currentCodes = snap.val();
+  });
+}
+
+// ── Dashboard ──
+function renderDashboard() {
+  const events = Object.values(window._eventsData);
+  const members = Object.values(window._membersData);
+  const bank = Object.values(window._orgBankData);
+  const donations = Object.values(window._donationsData).filter(d => d.status === 'pending');
+
+  document.getElementById('ds-events').textContent = events.length;
+  document.getElementById('ds-members').textContent = members.length;
+  document.getElementById('ds-pending').textContent = events.filter(e => e.status === 'review').length;
+  if (can('view_orgbank')) document.getElementById('ds-bank').textContent = bank.length;
+
+  // Recent events
+  const evEl = document.getElementById('dashEvents');
+  const sorted = events.sort((a,b) => (b.createdAt||0) - (a.createdAt||0)).slice(0,5);
+  if (!sorted.length) { evEl.innerHTML = '<div class="empty">No events yet.</div>'; }
+  else evEl.innerHTML = sorted.map(ev => `
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">
+      <div style="flex:1">
+        <div style="font-size:12px">${ev.name}</div>
+        <div style="font-size:10px;color:var(--text2);margin-top:2px">${tsToDate(ev.createdAt)} · ${ev.type}</div>
+      </div>
+      ${statusBadge(ev.status || 'published')}
+    </div>`).join('');
+
+  // Donations
+  const donEl = document.getElementById('dashDonations');
+  const myDons = can('edit_orgbank')
+    ? donations
+    : donations.filter(d => d.fromUsername === window._session?.username);
+  if (!myDons.length) { donEl.innerHTML = '<div class="empty">No pending donations.</div>'; }
+  else donEl.innerHTML = myDons.map(d => `
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">
+      <div style="flex:1">
+        <div style="font-size:12px">${d.materialName} × ${d.qty}</div>
+        <div style="font-size:10px;color:var(--text2);margin-top:2px">From: ${d.fromUsername} · Q:${d.quality}</div>
+      </div>
+      <span class="tag" style="background:var(--purple-dim);border:1px solid rgba(160,96,255,0.3);color:var(--purple);font-size:9px">PENDING</span>
+    </div>`).join('');
+}
+
+// ── Events List ──
+function renderEventsList() {
+  const evEl = document.getElementById('eventsList');
+  const events = Object.entries(window._eventsData);
+  if (!events.length) { evEl.innerHTML = '<div class="empty">No events logged.</div>'; return; }
+
+  // Hide new event button for members
+  if (!can('run_event')) document.getElementById('btn-new-event').style.display = 'none';
+
+  const sorted = events.sort((a,b) => (b[1].createdAt||0) - (a[1].createdAt||0));
+  evEl.innerHTML = sorted.map(([id, ev]) => {
+    const matCount = ev.materials ? Object.keys(ev.materials).length : 0;
+    const attCount = ev.attendance ? Object.keys(ev.attendance).length : 0;
+    return `
+    <div class="card" style="margin-bottom:12px">
+      <div style="display:flex;align-items:flex-start;gap:16px">
+        <div style="flex:1">
+          <div style="font-family:'Orbitron',sans-serif;font-size:13px;margin-bottom:6px">${ev.name}</div>
+          <div style="font-size:10px;color:var(--text2);letter-spacing:1px">${tsToDate(ev.createdAt)} · ${ev.type} · ${attCount} attendees · ${matCount} materials</div>
+          ${ev.notes ? `<div style="font-size:11px;color:var(--text2);margin-top:6px">${ev.notes}</div>` : ''}
+        </div>
+        ${statusBadge(ev.status || 'published')}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── New Event ──
+window.showNewEvent = function() {
+  if (!can('run_event')) return;
+  document.getElementById('eventsMain').style.display = 'none';
+  document.getElementById('newEventForm').style.display = '';
+  window._evAttendance = [];
+  window._evMaterials = [];
+  window._evAllocations = {};
+  evPhase(1);
+};
+
+window.cancelNewEvent = function() {
+  document.getElementById('eventsMain').style.display = '';
+  document.getElementById('newEventForm').style.display = 'none';
+};
+
+window.evPhase = function(n) {
+  for (let i = 1; i <= 5; i++) {
+    const el = document.getElementById('evPhase' + i);
+    if (el) el.style.display = i === n ? '' : 'none';
+    const dot = document.getElementById('ph' + i);
+    if (dot) {
+      dot.classList.remove('active', 'done');
+      if (i < n) dot.classList.add('done');
+      else if (i === n) dot.classList.add('active');
+    }
+  }
+  if (n === 4) buildReview();
+};
+
+window.parseAttendance = function() {
+  const raw = document.getElementById('evBotLog').value.trim();
+  if (!raw) return;
+  const threshold = parseInt(document.getElementById('evThreshold').value) || 30;
+  const lines = raw.split('\n').map(l => l.trim()).filter(l => l);
+  window._evAttendance = [];
+
+  for (const line of lines) {
+    const durMatch = line.match(/DUR:(\d+:\d+:\d+|\d+:\d+)/);
+    if (!durMatch) continue;
+    const durStr = durMatch[1];
+    const beforeDur = line.substring(0, line.indexOf('|DUR:')).trim();
+    const parts = beforeDur.split('|');
+    if (parts.length < 2) continue;
+    const namePart = parts[0].trim();
+    const username = parts[1].trim();
+    let displayName = namePart, role = '';
+    const roleMatch = namePart.match(/^([A-Z][A-Za-z0-9 ]+?\.)\s+(.+)$/);
+    if (roleMatch) { role = roleMatch[1]; displayName = roleMatch[2]; }
+    const durationMins = parseDuration(durStr);
+    const shareWeight = Math.min(1, durationMins / threshold);
+    window._evAttendance.push({ displayName, username, role, durationMins, durStr, shareWeight });
+  }
+
+  const tbody = document.getElementById('attBody');
+  tbody.innerHTML = window._evAttendance.sort((a,b) => b.durationMins - a.durationMins).map(m => {
+    const pct = Math.round(m.shareWeight * 100);
+    return `<tr>
+      <td>${m.displayName}</td>
+      <td style="color:var(--text2)">${m.username}</td>
+      <td>${m.role || '—'}</td>
+      <td>${fmtDur(m.durationMins)} <span style="color:var(--text3)">(${m.durStr})</span></td>
+      <td><div class="share-bar-wrap"><div class="share-bar"><div class="share-bar-fill" style="width:${pct}%"></div></div><span class="share-pct">${pct}%</span></div></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('attPreview').style.display = '';
+};
+
+window.addMaterial = function() {
+  const name = document.getElementById('matName').value.trim();
+  const qty = parseFloat(document.getElementById('matQty').value);
+  const qual = parseInt(document.getElementById('matQual').value);
+  const splittable = document.getElementById('matSplit').value === 'yes';
+  if (!name || isNaN(qty) || qty <= 0) return;
+  if (isNaN(qual) || qual < 1 || qual > 999) { alert('Quality must be between 1 and 999.'); return; }
+  window._evMaterials.push({ name, qty, qual, splittable });
+  document.getElementById('matName').value = '';
+  document.getElementById('matQty').value = '';
+  document.getElementById('matQual').value = '';
+  renderEvMaterials();
+};
+
+window.removeEvMaterial = function(i) {
+  window._evMaterials.splice(i, 1);
+  renderEvMaterials();
+};
+
+function renderEvMaterials() {
+  const el = document.getElementById('matListEv');
+  if (!window._evMaterials.length) { el.innerHTML = '<div style="color:var(--text3);font-size:11px;padding:8px 0">No materials added yet.</div>'; return; }
+  el.innerHTML = `<table class="tbl"><thead><tr><th>Material</th><th>Qty</th><th>Quality</th><th>Grade</th><th>Type</th><th></th></tr></thead><tbody>` +
+    window._evMaterials.map((m, i) => `<tr>
+      <td>${m.name}</td><td>${m.qty}</td>
+      <td>${qualBarHtml(m.qual)}</td>
+      <td>${gradeBadge(m.qual)}</td>
+      <td><span class="tag" style="${m.splittable ? 'color:var(--green);background:var(--green-dim);border:1px solid rgba(0,232,152,0.2)' : 'color:var(--orange);background:var(--orange-dim);border:1px solid rgba(255,112,32,0.2)'}">${m.splittable ? 'SPLITTABLE' : 'WHOLE UNITS'}</span></td>
+      <td><button class="btn red sm" onclick="removeEvMaterial(${i})">×</button></td>
+    </tr>`).join('') + '</tbody></table>';
+}
+
+function buildReview() {
+  const att = window._evAttendance;
+  const mats = window._evMaterials;
+  const el = document.getElementById('reviewContent');
+
+  if (!att.length || !mats.length) {
+    el.innerHTML = '<div class="notice warn">No attendance or materials to distribute.</div>';
+    return;
+  }
+
+  const totalWeight = att.reduce((s, m) => s + m.shareWeight, 0);
+  const allocs = {};
+  att.forEach(m => allocs[m.username] = {});
+
+  // Calculate initial allocations
+  for (const mat of mats) {
+    if (mat.splittable) {
+      att.forEach(m => {
+        allocs[m.username][mat.name] = (allocs[m.username][mat.name] || 0) + parseFloat(((m.shareWeight / totalWeight) * mat.qty).toFixed(4));
+      });
+    } else {
+      const exact = att.map(m => (m.shareWeight / totalWeight) * mat.qty);
+      const floors = exact.map(Math.floor);
+      const rems = exact.map((v, i) => ({ i, r: v - floors[i] })).sort((a,b) => b.r - a.r);
+      const extra = Math.round(mat.qty) - floors.reduce((a,b) => a+b, 0);
+      const bonusSet = new Set(rems.slice(0, extra).map(r => r.i));
+      att.forEach((m, i) => {
+        allocs[m.username][mat.name] = floors[i] + (bonusSet.has(i) ? 1 : 0);
+      });
+    }
+  }
+
+  window._evAllocations = allocs;
+
+  // Render editable review
+  el.innerHTML = att.sort((a,b) => b.durationMins - a.durationMins).map(m => {
+    const sharePct = ((m.shareWeight / totalWeight) * 100).toFixed(1);
+    const matRows = mats.map(mat => `
+      <div class="review-alloc-row">
+        <label>${mat.name} <span style="color:var(--text3)">(Q:${mat.qual})</span></label>
+        <input type="number" step="${mat.splittable ? '0.001' : '1'}" min="0"
+          value="${(allocs[m.username][mat.name] || 0)}"
+          onchange="updateAlloc('${m.username}', '${mat.name}', this.value)"
+          style="max-width:120px">
+        <span style="font-size:10px;color:var(--text3)">${mat.splittable ? '' : 'whole units'}</span>
+      </div>`).join('');
+    return `
+      <div class="review-member">
+        <div class="review-member-header">
+          <div class="review-member-name">${m.displayName}</div>
+          <span style="font-size:10px;color:var(--text2)">${m.username} · ${sharePct}% share · ${fmtDur(m.durationMins)}</span>
+        </div>
+        ${matRows}
+      </div>`;
+  }).join('');
+}
+
+window.updateAlloc = function(username, matName, val) {
+  if (!window._evAllocations[username]) window._evAllocations[username] = {};
+  window._evAllocations[username][matName] = parseFloat(val) || 0;
+};
+
+window.publishEvent = async function() {
+  const name = document.getElementById('evName').value.trim() || 'Unnamed Event';
+  const type = document.getElementById('evType').value;
+  const notes = document.getElementById('evNotes').value.trim();
+
+  // Build event record
+  const eventData = {
+    name, type, notes,
+    status: 'published',
+    createdBy: window._session.username,
+    createdAt: Date.now(),
+    attendance: {},
+    materials: {},
+    allocations: window._evAllocations
+  };
+
+  window._evAttendance.forEach(m => {
+    eventData.attendance[m.username] = { displayName: m.displayName, role: m.role, durationMins: m.durationMins, shareWeight: m.shareWeight };
+  });
+
+  window._evMaterials.forEach((m, i) => {
+    eventData.materials[`mat_${i}`] = m;
+  });
+
+  const eventRef = push(ref(db, 'events'));
+  const eventId = eventRef.key;
+  await set(eventRef, eventData);
+
+  // Push undistributed materials to org bank, one entry per member allocation
+  for (const [username, matMap] of Object.entries(window._evAllocations)) {
+    for (const [matName, qty] of Object.entries(matMap)) {
+      if (qty <= 0) continue;
+      const mat = window._evMaterials.find(m => m.name === matName);
+      await push(ref(db, 'org_bank'), {
+        materialName: matName,
+        qty,
+        quality: mat?.qual || 0,
+        splittable: mat?.splittable || false,
+        custodian: username,
+        sourceEvent: name,
+        sourceEventId: eventId,
+        status: 'undistributed',
+        loggedBy: window._session.username,
+        loggedAt: Date.now()
+      });
+    }
+  }
+
+  evPhase(5);
+};
+
+// ── My Inventory ──
+window.showAddPersonalModal = function() {
+  document.getElementById('modalTitle').textContent = 'LOG PERSONAL HAUL';
+  document.getElementById('modalBody').innerHTML = `
+    <div class="field"><label>Material Name</label><input type="text" id="pm-name" placeholder="Quantanium"></div>
+    <div class="grid2">
+      <div class="field"><label>Quantity</label><input type="number" id="pm-qty" placeholder="5" min="0.01" step="0.01"></div>
+      <div class="field"><label>Quality (1-999)</label><input type="number" id="pm-qual" placeholder="500" min="1" max="999"></div>
+    </div>
+    <div class="field"><label>Splittable?</label>
+      <select id="pm-split"><option value="yes">Yes (gems/stackables)</option><option value="no">No (whole units)</option></select>
+    </div>
+    <div class="field"><label>Notes (optional)</label><input type="text" id="pm-notes" placeholder="CRU-L1 run..."></div>
+    <div class="btn-row"><button class="btn green" onclick="submitPersonalHaul()">Log Haul</button></div>
+  `;
+  document.getElementById('modalOverlay').style.display = 'flex';
+};
+
+window.submitPersonalHaul = async function() {
+  const name = document.getElementById('pm-name').value.trim();
+  const qty = parseFloat(document.getElementById('pm-qty').value);
+  const qual = parseInt(document.getElementById('pm-qual').value);
+  const splittable = document.getElementById('pm-split').value === 'yes';
+  const notes = document.getElementById('pm-notes').value.trim();
+  if (!name || isNaN(qty) || qty <= 0 || isNaN(qual) || qual < 1 || qual > 999) { alert('Fill in all fields correctly.'); return; }
+
+  await push(ref(db, `personal_inventory/${window._session.memberId}`), {
+    materialName: name, qty, quality: qual, splittable, notes,
+    loggedAt: Date.now()
+  });
+  closeModalDirect();
+  renderMyInventory();
+};
+
+window.renderMyInventory = async function() {
+  const snap = await get(ref(db, `personal_inventory/${window._session.memberId}`));
+  const el = document.getElementById('myInvContent');
+  if (!snap.exists()) { el.innerHTML = '<div class="empty">No personal hauls logged.</div>'; }
+  else {
+    const items = Object.entries(snap.val());
+    el.innerHTML = `<div style="overflow-x:auto"><table class="tbl">
+      <thead><tr><th>Material</th><th>Qty</th><th>Quality</th><th>Grade</th><th>Notes</th><th>Logged</th><th></th></tr></thead>
+      <tbody>` + items.map(([id, m]) => `<tr>
+        <td>${m.materialName}</td>
+        <td>${m.qty}</td>
+        <td>${qualBarHtml(m.quality)}</td>
+        <td>${gradeBadge(m.quality)}</td>
+        <td style="color:var(--text2)">${m.notes || '—'}</td>
+        <td style="color:var(--text2)">${tsToDate(m.loggedAt)}</td>
+        <td style="display:flex;gap:6px">
+          <button class="btn sm orange" onclick="showDonateModal('${id}', '${m.materialName}', ${m.qty}, ${m.quality})">Donate</button>
+          <button class="btn sm red" onclick="deletePersonalItem('${id}')">×</button>
+        </td>
+      </tr>`).join('') + '</tbody></table></div>';
+  }
+
+  // Donation requests by this user
+  const myDons = Object.entries(window._donationsData).filter(([,d]) => d.fromUsername === window._session.username);
+  const donEl = document.getElementById('myDonationContent');
+  if (!myDons.length) { donEl.innerHTML = '<div class="empty">No pending donation requests.</div>'; }
+  else donEl.innerHTML = myDons.map(([id, d]) => `
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">
+      <div style="flex:1"><div style="font-size:12px">${d.materialName} × ${d.qty} (Q:${d.quality})</div>
+      <div style="font-size:10px;color:var(--text2);margin-top:2px">${tsToDate(d.requestedAt)}</div></div>
+      <span class="tag" style="background:var(--${d.status === 'pending' ? 'purple' : d.status === 'approved' ? 'green' : 'red'}-dim);color:var(--${d.status === 'pending' ? 'purple' : d.status === 'approved' ? 'green' : 'red'})">${d.status.toUpperCase()}</span>
+    </div>`).join('');
+};
+
+window.showDonateModal = function(itemId, matName, qty, qual) {
+  document.getElementById('modalTitle').textContent = 'DONATE TO ORG BANK';
+  document.getElementById('modalBody').innerHTML = `
+    <div class="notice info" style="margin-bottom:16px">This will submit a donation request to CLD Leadership for approval. The material stays in your inventory until approved.</div>
+    <div class="field"><label>Material</label><input value="${matName}" readonly style="opacity:0.6"></div>
+    <div class="grid2">
+      <div class="field"><label>Quantity to Donate</label><input type="number" id="don-qty" value="${qty}" max="${qty}" min="0.01" step="0.01"></div>
+      <div class="field"><label>Quality</label><input value="${qual}" readonly style="opacity:0.6"></div>
+    </div>
+    <div class="field"><label>Notes for Leadership</label><input type="text" id="don-notes" placeholder="For the next crafting run..."></div>
+    <div class="btn-row"><button class="btn gold" onclick="submitDonation('${itemId}', '${matName}', ${qual})">Submit Request</button></div>
+  `;
+  document.getElementById('modalOverlay').style.display = 'flex';
+};
+
+window.submitDonation = async function(itemId, matName, qual) {
+  const qty = parseFloat(document.getElementById('don-qty').value);
+  const notes = document.getElementById('don-notes').value.trim();
+  if (isNaN(qty) || qty <= 0) return;
+  await push(ref(db, 'donations'), {
+    fromUsername: window._session.username,
+    fromMemberId: window._session.memberId,
+    sourceItemId: itemId,
+    materialName: matName, qty, quality: qual, notes,
+    status: 'pending',
+    requestedAt: Date.now()
+  });
+  closeModalDirect();
+  renderMyInventory();
+};
+
+window.deletePersonalItem = async function(id) {
+  if (!confirm('Remove this item from your inventory?')) return;
+  await remove(ref(db, `personal_inventory/${window._session.memberId}/${id}`));
+  renderMyInventory();
+};
+
+// ── Org Bank ──
+window.renderOrgBank = function() {
+  if (!can('view_orgbank')) return;
+  const isEdit = can('edit_orgbank');
+  const filter = document.getElementById('ob-filter')?.value.toLowerCase() || '';
+  const statusFilter = document.getElementById('ob-status-filter')?.value || '';
+  if (isEdit) document.getElementById('ob-actions-th').textContent = 'Actions';
+  if (!isEdit) document.getElementById('orgbank-readonly-notice').style.display = '';
+
+  const entries = Object.entries(window._orgBankData).filter(([, e]) => {
+    const matchText = !filter || e.materialName?.toLowerCase().includes(filter) || e.custodian?.toLowerCase().includes(filter);
+    const matchStatus = !statusFilter || e.status === statusFilter;
+    return matchText && matchStatus;
+  });
+
+  // Stats
+  const all = Object.values(window._orgBankData);
+  document.getElementById('ob-total').textContent = all.length;
+  document.getElementById('ob-undist').textContent = all.filter(e => e.status === 'undistributed').length;
+  document.getElementById('ob-members').textContent = new Set(all.map(e => e.custodian)).size;
+  document.getElementById('ob-events').textContent = new Set(all.map(e => e.sourceEventId).filter(Boolean)).size;
+
+  const tbody = document.getElementById('obBody');
+  if (!entries.length) { tbody.innerHTML = '<tr><td colspan="9" class="empty">No entries match filter.</td></tr>'; }
+  else tbody.innerHTML = entries.map(([id, e]) => `<tr>
+    <td style="font-weight:600">${e.materialName}</td>
+    <td>${e.qty}</td>
+    <td>${qualBarHtml(e.quality || 0)}</td>
+    <td>${gradeBadge(e.quality || 0)}</td>
+    <td style="color:var(--text2)">${e.custodian || '—'}</td>
+    <td style="color:var(--text2);font-size:11px">${e.sourceEvent || '—'}</td>
+    <td>${statusBadge(e.status)}</td>
+    <td style="color:var(--text2);font-size:11px">${tsToDate(e.loggedAt)}</td>
+    ${isEdit ? `<td><select onchange="updateBankStatus('${id}', this.value)" style="font-size:10px;padding:4px 8px;width:auto;background:var(--bg2)">
+      <option value="undistributed" ${e.status==='undistributed'?'selected':''}>Undistributed</option>
+      <option value="distributed" ${e.status==='distributed'?'selected':''}>Distributed</option>
+      <option value="committed" ${e.status==='committed'?'selected':''}>Committed</option>
+      <option value="spent" ${e.status==='spent'?'selected':''}>Spent</option>
+    </select></td>` : '<td></td>'}
+  </tr>`).join('');
+
+  // Donation review
+  const pendingDons = Object.entries(window._donationsData).filter(([,d]) => d.status === 'pending');
+  const donSec = document.getElementById('donationReviewSection');
+  if (isEdit && pendingDons.length) {
+    donSec.style.display = '';
+    document.getElementById('donationReviewContent').innerHTML = pendingDons.map(([id, d]) => `
+      <div class="card" style="margin-bottom:10px">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div style="flex:1">
+            <div style="font-size:12px"><strong>${d.fromUsername}</strong> wants to donate <strong>${d.materialName} × ${d.qty}</strong> (Q:${d.quality})</div>
+            <div style="font-size:10px;color:var(--text2);margin-top:4px">${d.notes || 'No notes'} · ${tsToDate(d.requestedAt)}</div>
+          </div>
+          <button class="btn sm green" onclick="approveDonation('${id}')">Approve</button>
+          <button class="btn sm red" onclick="rejectDonation('${id}')">Reject</button>
+        </div>
+      </div>`).join('');
+  } else donSec.style.display = 'none';
+};
+
+window.updateBankStatus = async function(id, status) {
+  await update(ref(db, `org_bank/${id}`), { status });
+};
+
+window.approveDonation = async function(id) {
+  const don = window._donationsData[id];
+  if (!don) return;
+  await push(ref(db, 'org_bank'), {
+    materialName: don.materialName, qty: don.qty, quality: don.quality,
+    custodian: don.fromUsername,
+    sourceEvent: 'Personal Donation',
+    sourceEventId: null,
+    status: 'undistributed',
+    loggedBy: window._session.username,
+    loggedAt: Date.now()
+  });
+  await update(ref(db, `donations/${id}`), { status: 'approved', reviewedBy: window._session.username, reviewedAt: Date.now() });
+};
+
+window.rejectDonation = async function(id) {
+  await update(ref(db, `donations/${id}`), { status: 'rejected', reviewedBy: window._session.username, reviewedAt: Date.now() });
+};
+
+// ── Admin ──
+window.renderAdmin = function() {
+  if (!can('admin')) return;
+
+  // Members list
+  const members = Object.entries(window._membersData);
+  const el = document.getElementById('adminMembers');
+  if (!members.length) { el.innerHTML = '<div class="empty">No enrolled members.</div>'; }
+  else el.innerHTML = `<table class="tbl"><thead><tr><th>Username</th><th>Role</th><th>Joined</th><th>Last Seen</th></tr></thead><tbody>` +
+    members.sort((a,b) => (b[1].lastSeen||0)-(a[1].lastSeen||0)).map(([id, m]) => `<tr>
+      <td>${m.username}</td>
+      <td>${roleBadgeHtml(m.role)}</td>
+      <td style="color:var(--text2)">${tsToDate(m.joinedAt)}</td>
+      <td style="color:var(--text2)">${tsToDate(m.lastSeen)}</td>
+    </tr>`).join('') + '</tbody></table>';
+
+  // Invite codes
+  const codes = window._currentCodes;
+  document.getElementById('adminCodes').innerHTML = Object.entries(ROLE_LABELS).map(([key, label]) => `
+    <div class="field">
+      <label>${label}</label>
+      <input type="text" id="code-${key}" value="${codes[key] || ''}" style="letter-spacing:2px">
+    </div>`).join('');
+
+  // Revoke list
+  document.getElementById('adminRevokeList').innerHTML = members.map(([id, m]) =>
+    m.username === window._session.username ? '' : `
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+      <span style="flex:1;font-size:12px">${m.username}</span>
+      ${roleBadgeHtml(m.role)}
+      <button class="btn sm red" onclick="revokeMember('${id}', '${m.username}')">Revoke Access</button>
+    </div>`).join('');
+};
+
+window.saveInviteCodes = async function() {
+  const newCodes = {};
+  for (const key of Object.keys(ROLE_LABELS)) {
+    newCodes[key] = document.getElementById('code-' + key)?.value.trim().toUpperCase() || DEFAULT_CODES[key];
+  }
+  await set(ref(db, 'config/invite_codes'), newCodes);
+  window._currentCodes = newCodes;
+  alert('Invite codes saved.');
+};
+
+window.revokeMember = async function(id, username) {
+  if (!confirm(`Revoke access for ${username}? They will be unable to log in.`)) return;
+  await remove(ref(db, `members/${id}`));
+};
+
+// ── Modals ──
+window.closeModal = function(e) { if (e.target === document.getElementById('modalOverlay')) closeModalDirect(); };
+window.closeModalDirect = function() { document.getElementById('modalOverlay').style.display = 'none'; };
+
+// Enter key
+document.getElementById('loginUsername').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+</script>
+</body>
+</html>
