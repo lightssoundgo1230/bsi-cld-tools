@@ -1153,6 +1153,7 @@ window.completeLogin = async function(username, role, memberId, updateLastSeen) 
   if (updateLastSeen) await update(ref(db, 'members/' + memberId), { lastSeen: Date.now() }).catch(() => {});
   setMsg('loginErr', 'Access granted. Loading...', 'var(--green)');
   window._session = { username, role, memberId };
+  localStorage.setItem('tbsi_session', JSON.stringify({ username, role, memberId }));
   setTimeout(() => {
     document.getElementById('loginScreen').style.display = 'none';
     document.getElementById('app').style.display = 'block';
@@ -1165,6 +1166,7 @@ window.completeLogin = async function(username, role, memberId, updateLastSeen) 
 window.doLogout = function() {
   window._session = null;
   window._pendingAuthSession = null;
+  localStorage.removeItem('tbsi_session');
   document.getElementById('loginScreen').style.display = 'flex';
   document.getElementById('app').style.display = 'none';
   showPanel('login');
@@ -1246,6 +1248,35 @@ function updateRequestsBadge() {
 document.getElementById('loginPassword')?.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
 document.getElementById('loginUsername')?.addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('loginPassword')?.focus(); });
 
+
+// ── Auto-restore session on page load ──
+(async function restoreSession() {
+  const saved = localStorage.getItem('tbsi_session');
+  if (!saved) return;
+  try {
+    const { username, role, memberId } = JSON.parse(saved);
+    if (!username || !role || !memberId) { localStorage.removeItem('tbsi_session'); return; }
+
+    // Verify member still exists and get current role from Firebase
+    const snap = await withTimeout(get(ref(db, 'members/' + memberId)), 5000).catch(() => null);
+    if (!snap?.exists()) { localStorage.removeItem('tbsi_session'); return; }
+
+    const member = snap.val();
+    if (member.username !== username) { localStorage.removeItem('tbsi_session'); return; }
+
+    // Use role from Firebase (may have changed since last login)
+    window._session = { username, role: member.role, memberId };
+    localStorage.setItem('tbsi_session', JSON.stringify({ username, role: member.role, memberId }));
+
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    setupUI();
+    loadAll();
+    loadPersonalInvCache();
+  } catch(e) {
+    localStorage.removeItem('tbsi_session');
+  }
+})();
 
 // ── UI Setup based on role ──
 function setupUI() {
