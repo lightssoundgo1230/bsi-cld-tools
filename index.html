@@ -3050,7 +3050,7 @@ window.refreshBlueprintData = async function() {
   const btn = document.getElementById('btn-refresh-blueprints');
   if (btn) { btn.textContent = '↻ Fetching...'; btn.disabled = true; }
   try {
-    const verRes = await fetch('https://scmdb.net/data/versions.json');
+    const verRes = await fetch('https://lucky-hall-fcdf.lightssoundgobsi.workers.dev/versions.json');
     if (!verRes.ok) throw new Error('versions.json failed: ' + verRes.status);
     const versions = await verRes.json();
     const latest = versions[0]?.version;
@@ -3062,7 +3062,7 @@ window.refreshBlueprintData = async function() {
     }
 
     if (btn) btn.textContent = '↻ Loading blueprints...';
-    const bpRes = await fetch('https://scmdb.net/data/crafting_blueprints-' + latest + '.json');
+    const bpRes = await fetch('https://lucky-hall-fcdf.lightssoundgobsi.workers.dev/crafting_blueprints-' + latest + '.json');
     if (!bpRes.ok) throw new Error('Blueprints fetch failed: ' + bpRes.status);
     const bpData = await bpRes.json();
 
