@@ -3485,38 +3485,62 @@ window.buildMiningPlan = function(context) {
   el.innerHTML = renderNeededList(needed, miningData);
 };
 
+// Normalize material names for matching — handles (Ore)/(Raw) suffix and spelling variants
+function normalizeMaterialName(name) {
+  return (name || '')
+    .replace(' (Ore)', '').replace(' (Raw)', '').replace(' (ore)', '').replace(' (raw)', '')
+    .replace('Aluminium', 'Aluminum')  // SCMDB uses British spelling
+    .replace('Quantainium', 'Quantanium') // SCMDB spelling variant
+    .toLowerCase().trim();
+}
+
 function renderNeededList(needed, miningData) {
   const elements = miningData ? (miningData.mineableElements || {}) : {};
   const locations = miningData ? (miningData.locations || {}) : {};
   const compositions = miningData ? (miningData.compositions || {}) : {};
 
-  // Build reverse index: base element name → locations with probability
+  // Build reverse index: normalized element name → best locations
+  // Location structure: location.groups[].deposits[].compositionGuid → composition.parts[].elementName + minPercent/maxPercent
   const elementLocations = {};
+
   for (const [locId, loc] of Object.entries(locations)) {
-    const compId = loc.compositionId || loc.composition;
-    const comp = compositions[compId];
-    if (!comp) continue;
-    for (const [elemId, prob] of Object.entries(comp.elements || {})) {
-      const elemName = (elements[elemId]?.name || '').replace(' (Ore)','').replace(' (Raw)','');
-      if (!elemName) continue;
-      if (!elementLocations[elemName]) elementLocations[elemName] = [];
-      elementLocations[elemName].push({
-        location: loc.name || locId,
-        body: loc.body || loc.planet || '',
-        system: loc.system || 'Stanton',
-        probability: typeof prob === 'number' ? prob : (prob.probability || prob.chance || 0),
-        type: loc.type || 'space'
-      });
+    const groups = loc.groups || [];
+    for (const group of groups) {
+      const deposits = group.deposits || [];
+      for (const deposit of deposits) {
+        const compGuid = deposit.compositionGuid;
+        const relProb = deposit.relativeProbability || 1;
+        const comp = compositions[compGuid];
+        if (!comp) continue;
+        for (const part of (comp.parts || [])) {
+          const elemName = normalizeMaterialName(part.elementName || '');
+          if (!elemName) continue;
+          if (!elementLocations[elemName]) elementLocations[elemName] = {};
+          // Key by location to aggregate across deposits
+          const locKey = loc.locationName || loc.name || locId;
+          if (!elementLocations[elemName][locKey]) {
+            elementLocations[elemName][locKey] = {
+              location: locKey,
+              system: loc.system || 'Stanton',
+              locationType: loc.locationType || loc.type || '',
+              score: 0,
+              maxPct: 0
+            };
+          }
+          // Score = relativeProbability × maxPercent — higher is better
+          const score = relProb * (part.maxPercent || 0);
+          elementLocations[elemName][locKey].score += score;
+          elementLocations[elemName][locKey].maxPct = Math.max(elementLocations[elemName][locKey].maxPct, part.maxPercent || 0);
+        }
+      }
     }
   }
 
   const rarityColor = { common:'var(--text2)', uncommon:'var(--accent)', rare:'var(--orange)', epic:'var(--purple)', legendary:'var(--green)' };
 
   return Object.entries(needed).map(([mat, info]) => {
-    const elemEntry = Object.values(elements).find(e => {
-      const base = (e.name||'').replace(' (Ore)','').replace(' (Raw)','').toLowerCase();
-      return base === mat.toLowerCase() || (e.name||'').toLowerCase() === mat.toLowerCase();
-    });
+    const normMat = normalizeMaterialName(mat);
+    const elemEntry = Object.values(elements).find(e => normalizeMaterialName(e.name) === normMat);
 
     const rarity = elemEntry?.rarity || 'unknown';
     const rc = rarityColor[rarity] || 'var(--text3)';
@@ -3527,8 +3551,9 @@ function renderNeededList(needed, miningData) {
     const instColor = instability >= 700 ? 'var(--red)' : instability >= 400 ? 'var(--orange)' : 'var(--green)';
     const resColor = resistance >= 0.7 ? 'var(--red)' : resistance >= 0.4 ? 'var(--orange)' : 'var(--green)';
 
-    const baseName = mat.replace(' (Ore)','').replace(' (Raw)','');
-    const locs = (elementLocations[baseName] || []).sort((a,b) => b.probability - a.probability).slice(0, 3);
+    const normName = normalizeMaterialName(mat);
+    const locMap = elementLocations[normName] || {};
+    const locs = Object.values(locMap).sort((a,b) => b.score - a.score).slice(0, 3);
     const grade = info.minQuality >= 750 ? 'Prime' : info.minQuality >= 500 ? 'High' : info.minQuality >= 250 ? 'Standard' : 'Any';
     const needed_qty = Math.ceil(info.qty * 100) / 100;
 
@@ -3537,11 +3562,12 @@ function renderNeededList(needed, miningData) {
         <span style="font-size:10px;color:var(--text3);min-width:16px">#${i+1}</span>
         <div style="flex:1">
           <span style="font-size:12px">${l.location}</span>
-          ${l.body ? `<span style="font-size:10px;color:var(--text2);margin-left:8px">${l.body}${l.system !== 'Stanton' ? ' · ' + l.system : ''}</span>` : ''}
+          ${l.system && l.system !== 'Stanton' ? `<span style="font-size:10px;color:var(--text2);margin-left:8px">${l.system}</span>` : ''}
+          ${l.locationType ? `<span style="font-size:10px;color:var(--text3);margin-left:6px">${l.locationType}</span>` : ''}
         </div>
-        <span class="tag" style="background:var(--green-dim);border:1px solid rgba(0,232,152,0.2);color:var(--green);font-size:9px">${(l.probability * 100).toFixed(1)}%</span>
+        <span class="tag" style="background:var(--green-dim);border:1px solid rgba(0,232,152,0.2);color:var(--green);font-size:9px">up to ${l.maxPct.toFixed(1)}%</span>
       </div>`).join('') :
-      `<div style="font-size:11px;color:var(--text3);padding:8px 0">${isFPS ? '🧱 FPS mining (ground/cave node)' : 'No location data — may be mission reward or FPS loot'}</div>`;
+      `<div style="font-size:11px;color:var(--text3);padding:8px 0">${isFPS ? '🧱 FPS mining (ground/cave node)' : 'No location data found — check SCMDB directly'}</div>`;
 
     return `<div style="background:var(--panel2);border:1px solid var(--border);margin-bottom:12px">
       <div style="padding:12px 16px;border-bottom:1px solid var(--border)">
