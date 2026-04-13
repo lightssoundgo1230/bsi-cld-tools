@@ -487,8 +487,8 @@ label { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: 
     <div class="topbar-logo">TBSI · CLD</div>
     <div class="topbar-divider"></div>
     <div class="nav-tabs">
-      <button class="nav-tab active" onclick="showPage('dashboard')" id="tab-dashboard">Dashboard</button>
-      <button class="nav-tab" onclick="showPage('events')" id="tab-events">Events</button>
+      <button class="nav-tab active locked" onclick="showPage('dashboard')" id="tab-dashboard">Dashboard</button>
+      <button class="nav-tab locked" onclick="showPage('events')" id="tab-events">Events</button>
       <button class="nav-tab" onclick="showPage('myinv')" id="tab-myinv">My Inventory</button>
       <button class="nav-tab locked" id="tab-orgbank" onclick="showPage('orgbank')">Org Bank</button>
       <button class="nav-tab locked" id="tab-reqs" onclick="showPage('reqs')">Requisitions</button>
@@ -701,7 +701,8 @@ label { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: 
     <div style="display:flex;gap:2px;margin-bottom:20px;border-bottom:1px solid var(--border);padding-bottom:0">
       <button class="nav-tab active" id="obtab-bank" onclick="switchOBTab('bank')" style="border-bottom:none">Undistributed</button>
       <button class="nav-tab" id="obtab-dist" onclick="switchOBTab('dist')" style="border-bottom:none">Distribution Log</button>
-      <button class="nav-tab" id="obtab-donations" onclick="switchOBTab('donations')" style="border-bottom:none" id="obtab-donations">Donation Requests</button>
+      <button class="nav-tab" id="obtab-donations" onclick="switchOBTab('donations')" style="border-bottom:none">Donation Requests</button>
+      <button class="nav-tab" id="obtab-treasury" onclick="switchOBTab('treasury')" style="border-bottom:none;display:none">💰 Treasury</button>
     </div>
     <!-- Bank tab -->
     <div id="ob-tab-bank">
@@ -720,6 +721,39 @@ label { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: 
     <!-- Donations tab -->
     <div id="ob-tab-donations" style="display:none">
       <div id="donationReviewContent"><div class="empty">No pending donation requests.</div></div>
+    </div>
+
+    <!-- Treasury tab -->
+    <div id="ob-tab-treasury" style="display:none">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+        <div>
+          <div class="section-title" style="font-size:9px;margin-bottom:4px"><div class="dot" style="background:var(--gold)"></div> Org Treasury</div>
+          <div style="font-size:11px;color:var(--text2)">aUEC held by leadership on behalf of the org.</div>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center">
+          <div class="stat-box" style="min-width:160px">
+            <div class="stat-val" id="treasury-total">—</div>
+            <div class="stat-label">Total Org aUEC</div>
+          </div>
+          <button class="btn gold" id="btn-update-balance" onclick="showUpdateBalanceModal()" style="display:none">+ Update My Balance</button>
+        </div>
+      </div>
+
+      <!-- Balances table -->
+      <div class="section-title" style="font-size:9px;margin-bottom:10px"><div class="dot" style="background:var(--gold)"></div> Member Balances</div>
+      <div id="treasuryBalances"><div class="empty">No balances recorded.</div></div>
+
+      <!-- Purchase Orders -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:24px;margin-bottom:10px">
+        <div class="section-title" style="font-size:9px;margin-bottom:0"><div class="dot" style="background:var(--purple)"></div> Purchase Orders</div>
+        <button class="btn sm" style="border-color:var(--purple);color:var(--purple)" id="btn-new-po" onclick="showNewPOModal()" style="display:none">+ New PO</button>
+      </div>
+      <div style="display:flex;gap:2px;margin-bottom:16px;border-bottom:1px solid var(--border)">
+        <button class="nav-tab active" id="potab-pending" onclick="switchPOTab('pending')" style="border-bottom:none;font-size:10px">Pending</button>
+        <button class="nav-tab" id="potab-approved" onclick="switchPOTab('approved')" style="border-bottom:none;font-size:10px">Approved</button>
+        <button class="nav-tab" id="potab-complete" onclick="switchPOTab('complete')" style="border-bottom:none;font-size:10px">Complete</button>
+      </div>
+      <div id="poContent"><div class="empty">No purchase orders.</div></div>
     </div>
   </div>
 
@@ -966,8 +1000,9 @@ const BOOTSTRAP_ROLE = 'cld_leadership';
 
 const ROLE_LABELS = {
   member: 'Member',
+  nco: 'NCO',
   event_organizer: 'Event Organizer',
-  general_leadership: 'Gen. Leadership',
+  general_leadership: 'C.O.',
   cld_leadership: 'CLD Leadership',
   director_of_commerce: 'Dir. of Commerce'
 };
@@ -1063,12 +1098,17 @@ function can(action) {
   const r = window._session?.role;
   switch (action) {
     case 'run_event':      return ['event_organizer','cld_leadership','director_of_commerce'].includes(r);
+    case 'view_events':    return ['event_organizer','general_leadership','cld_leadership','director_of_commerce'].includes(r);
     case 'view_orgbank':   return ['general_leadership','cld_leadership','director_of_commerce'].includes(r);
     case 'edit_orgbank':   return ['cld_leadership','director_of_commerce'].includes(r);
     case 'admin':          return ['cld_leadership','director_of_commerce'].includes(r);
     case 'approve_req':    return r === 'director_of_commerce';
-    case 'submit_req':     return ['general_leadership','cld_leadership','director_of_commerce'].includes(r);
-    case 'view_req':       return ['general_leadership','cld_leadership','director_of_commerce'].includes(r);
+    case 'submit_req':     return ['cld_leadership','director_of_commerce'].includes(r);
+    case 'view_req':       return ['cld_leadership','director_of_commerce'].includes(r);
+    case 'view_dashboard': return ['general_leadership','cld_leadership','director_of_commerce'].includes(r);
+    case 'view_treasury':  return ['cld_leadership','director_of_commerce'].includes(r);
+    case 'submit_po':      return ['cld_leadership','director_of_commerce'].includes(r);
+    case 'approve_po':     return r === 'director_of_commerce';
   }
   return false;
 }
@@ -1321,21 +1361,30 @@ function setupUI() {
   document.getElementById('topbarUsername').textContent = s.username;
   document.getElementById('topbarBadge').innerHTML = roleBadgeHtml(s.role);
 
-  if (can('run_event')) document.getElementById('tab-events').classList.remove('locked');
+  if (can('view_dashboard')) document.getElementById('tab-dashboard').classList.remove('locked');
+  if (can('view_events')) document.getElementById('tab-events').classList.remove('locked');
   if (can('view_orgbank')) {
     document.getElementById('tab-orgbank').classList.remove('locked');
-    document.getElementById('ds-bank-box').style.display = '';
+    document.getElementById('ds-bank-box')?.style && (document.getElementById('ds-bank-box').style.display = '');
   }
   if (can('admin')) document.getElementById('tab-admin').classList.remove('locked');
   if (can('submit_req') || can('view_req')) document.getElementById('tab-reqs').classList.remove('locked');
-  if (!can('submit_req')) document.getElementById('btn-new-req').style.display = 'none';
+  if (!can('submit_req')) { const b = document.getElementById('btn-new-req'); if (b) b.style.display = 'none'; }
   document.getElementById('tab-crafting').classList.remove('locked');
   if (can('edit_orgbank')) document.getElementById('tab-orgcrafting').classList.remove('locked');
+  if (can('view_treasury')) {
+    const tTab = document.getElementById('obtab-treasury');
+    if (tTab) tTab.style.display = '';
+    const bBal = document.getElementById('btn-update-balance');
+    if (bBal) bBal.style.display = '';
+    const bPO = document.getElementById('btn-new-po');
+    if (bPO) bPO.style.display = '';
+  }
 }
 
 // ── Navigation ──
 window.showPage = function(page) {
-  const locked = { orgbank: !can('view_orgbank'), admin: !can('admin'), reqs: !can('submit_req') && !can('view_req'), crafting: false, orgcrafting: !can('edit_orgbank') };
+  const locked = { dashboard: !can('view_dashboard'), events: !can('view_events'), orgbank: !can('view_orgbank'), admin: !can('admin'), reqs: !can('submit_req') && !can('view_req'), crafting: false, orgcrafting: !can('edit_orgbank'), treasury: !can('view_treasury') };
   if (locked[page]) return;
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
@@ -1402,6 +1451,14 @@ function loadAll() {
       const verEl = document.getElementById('uex-catalog-version');
       if (verEl) verEl.textContent = cached.cachedAt ? 'Items: ' + new Date(cached.cachedAt).toLocaleDateString() : '';
     }
+  });
+  onValue(ref(db, 'treasury'), snap => {
+    window._treasuryData = snap.val() || {};
+    if (document.getElementById('ob-tab-treasury')?.style.display !== 'none') renderTreasury();
+  });
+  onValue(ref(db, 'purchase_orders'), snap => {
+    window._poData = snap.val() || {};
+    if (document.getElementById('ob-tab-treasury')?.style.display !== 'none') renderPOList();
   });
   onValue(ref(db, 'config/mining_data_cache'), snap => {
     if (snap.exists()) {
@@ -1991,13 +2048,24 @@ window.deletePersonalItem = async function(id) {
 
 // ── Org Bank ──
 window.switchOBTab = function(tab) {
-  ['bank','dist','donations'].forEach(t => {
-    document.getElementById('ob-tab-' + t).style.display = t === tab ? '' : 'none';
+  ['bank','dist','donations','treasury'].forEach(t => {
+    const el = document.getElementById('ob-tab-' + t);
+    if (el) el.style.display = t === tab ? '' : 'none';
     document.getElementById('obtab-' + t)?.classList.toggle('active', t === tab);
   });
   if (tab === 'dist') renderDistLog();
   if (tab === 'donations') renderDonationRequests();
+  if (tab === 'treasury') renderTreasury();
 };
+
+window.switchPOTab = function(tab) {
+  ['pending','approved','complete'].forEach(t => {
+    document.getElementById('potab-' + t)?.classList.toggle('active', t === tab);
+  });
+  window._poTab = tab;
+  renderPOList();
+};
+window._poTab = 'pending';
 
 window.renderOrgBank = function() {
   if (!can('view_orgbank')) return;
@@ -2916,6 +2984,8 @@ window.showSourcingPanel = async function(reqId) {
 // ── Crafting / Blueprints ──
 window._craftingJobsData = {};
 window._miningData = null;
+window._treasuryData = {};
+window._poData = {};
 
 window.switchCraftTab = function(tab, context) {
   const prefix = (context === 'org' || context === 'orgcrafting') ? 'orgcraft' : 'craft';
@@ -3528,6 +3598,193 @@ window.refreshBlueprintData = async function() {
   }
 };
 
+// ── Treasury ──
+function fmtAuec(n) {
+  if (!n) return '0 aUEC';
+  return n.toLocaleString() + ' aUEC';
+}
+
+window.renderTreasury = function() {
+  if (!can('view_treasury')) return;
+
+  // Total
+  const balances = Object.values(window._treasuryData || {});
+  const total = balances.reduce((s, b) => s + (b.balance || 0), 0);
+  const totalEl = document.getElementById('treasury-total');
+  if (totalEl) totalEl.textContent = fmtAuec(total);
+
+  // Member balances table
+  const balEl = document.getElementById('treasuryBalances');
+  if (!balEl) return;
+  if (!balances.length) { balEl.innerHTML = '<div class="empty">No balances recorded yet.</div>'; }
+  else {
+    balEl.innerHTML = `<table class="tbl"><thead><tr><th>Member</th><th>Balance</th><th>Last Updated</th><th></th></tr></thead><tbody>` +
+      Object.entries(window._treasuryData).sort((a,b) => (b[1].balance||0) - (a[1].balance||0)).map(([id, b]) => `<tr>
+        <td>${b.username}</td>
+        <td style="color:var(--gold);font-family:'Orbitron',sans-serif;font-size:12px">${fmtAuec(b.balance)}</td>
+        <td style="color:var(--text2)">${tsToDate(b.updatedAt)}</td>
+        <td>${b.username === window._session?.username ? `<button class="btn sm orange" onclick="showUpdateBalanceModal()">Edit</button>` : ''}</td>
+      </tr>`).join('') + '</tbody></table>';
+  }
+
+  renderPOList();
+};
+
+window.showUpdateBalanceModal = function() {
+  if (!can('view_treasury')) return;
+  const username = window._session.username;
+  const existing = Object.entries(window._treasuryData).find(([,b]) => b.username === username);
+  const current = existing ? existing[1].balance : 0;
+
+  document.getElementById('modalTitle').textContent = 'UPDATE MY aUEC BALANCE';
+  document.getElementById('modalBody').innerHTML = `
+    <div style="font-size:11px;color:var(--text2);margin-bottom:16px">Enter your current aUEC balance held for the org. This replaces your previous balance.</div>
+    <div class="field">
+      <label>Current Balance (aUEC)</label>
+      <input type="number" id="bal-amount" value="${current}" min="0" step="1" placeholder="0" style="font-family:'Orbitron',sans-serif">
+    </div>
+    <div class="field">
+      <label>Notes (optional)</label>
+      <input type="text" id="bal-notes" placeholder="e.g. After buying Taranite shipment">
+    </div>
+    <div class="btn-row">
+      <button class="btn gold" onclick="submitBalanceUpdate()">Save Balance</button>
+      <button class="btn sm" onclick="closeModalDirect()">Cancel</button>
+    </div>`;
+  document.getElementById('modalOverlay').style.display = 'flex';
+  setTimeout(() => document.getElementById('bal-amount')?.select(), 100);
+};
+
+window.submitBalanceUpdate = async function() {
+  const amount = parseInt(document.getElementById('bal-amount')?.value) || 0;
+  const notes = document.getElementById('bal-notes')?.value.trim() || '';
+  const username = window._session.username;
+
+  // Find or create treasury entry for this user
+  const existing = Object.entries(window._treasuryData).find(([,b]) => b.username === username);
+  if (existing) {
+    await update(ref(db, 'treasury/' + existing[0]), { balance: amount, updatedAt: Date.now(), notes });
+  } else {
+    await push(ref(db, 'treasury'), { username, balance: amount, updatedAt: Date.now(), notes });
+  }
+  closeModalDirect();
+};
+
+window.showNewPOModal = function() {
+  if (!can('submit_po')) return;
+  const username = window._session.username;
+  const myBalance = Object.values(window._treasuryData).find(b => b.username === username)?.balance || 0;
+
+  document.getElementById('modalTitle').textContent = 'NEW PURCHASE ORDER';
+  document.getElementById('modalBody').innerHTML = `
+    <div class="notice info" style="margin-bottom:16px">Your current balance: <strong style="color:var(--gold)">${fmtAuec(myBalance)}</strong></div>
+    <div class="field">
+      <label>Item(s) Purchased</label>
+      <input type="text" id="po-items" placeholder="e.g. 50 SCU Taranite, ship components...">
+    </div>
+    <div class="field">
+      <label>Amount Spent (aUEC)</label>
+      <input type="number" id="po-amount" min="1" step="1" placeholder="0" style="font-family:'Orbitron',sans-serif">
+    </div>
+    <div class="field">
+      <label>Reason / Purpose</label>
+      <input type="text" id="po-reason" placeholder="e.g. Restocking org bank for upcoming crafting run">
+    </div>
+    <div class="btn-row">
+      <button class="btn purple" onclick="submitPO()">Submit to DoC</button>
+      <button class="btn sm" onclick="closeModalDirect()">Cancel</button>
+    </div>`;
+  document.getElementById('modalOverlay').style.display = 'flex';
+};
+
+window.submitPO = async function() {
+  const items = document.getElementById('po-items')?.value.trim();
+  const amount = parseInt(document.getElementById('po-amount')?.value) || 0;
+  const reason = document.getElementById('po-reason')?.value.trim();
+  if (!items || amount <= 0 || !reason) { alert('Fill in all fields.'); return; }
+
+  await push(ref(db, 'purchase_orders'), {
+    submittedBy: window._session.username,
+    items, amount, reason,
+    status: 'pending',
+    submittedAt: Date.now()
+  });
+  closeModalDirect();
+};
+
+window.renderPOList = function() {
+  const el = document.getElementById('poContent');
+  if (!el) return;
+  const tab = window._poTab || 'pending';
+  const pos = Object.entries(window._poData).filter(([,p]) => p.status === tab);
+
+  if (!pos.length) { el.innerHTML = '<div class="empty">No ' + tab + ' purchase orders.</div>'; return; }
+
+  const canApprove = can('approve_po');
+  const myUsername = window._session?.username;
+
+  el.innerHTML = pos.sort((a,b) => (b[1].submittedAt||0) - (a[1].submittedAt||0)).map(([id, p]) => {
+    const statusColor = p.status === 'pending' ? 'var(--orange)' : p.status === 'approved' ? 'var(--green)' : 'var(--accent)';
+    const isMine = p.submittedBy === myUsername;
+
+    return `<div class="card" style="margin-bottom:10px">
+      <div style="display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap">
+        <div style="flex:1">
+          <div style="font-size:12px;font-weight:600;margin-bottom:4px">${p.items}</div>
+          <div style="font-size:11px;color:var(--text2);margin-bottom:4px">${p.reason}</div>
+          <div style="display:flex;gap:12px;flex-wrap:wrap;font-size:10px;color:var(--text3)">
+            <span>By: ${p.submittedBy}</span>
+            <span>${tsToDate(p.submittedAt)}</span>
+            ${p.approvedBy ? `<span>Approved by: ${p.approvedBy}</span>` : ''}
+            ${p.completedAt ? `<span>Completed: ${tsToDate(p.completedAt)}</span>` : ''}
+          </div>
+          ${p.docNotes ? `<div style="font-size:11px;color:var(--text2);margin-top:6px;font-style:italic">DoC: "${p.docNotes}"</div>` : ''}
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
+          <span style="font-family:'Orbitron',sans-serif;font-size:14px;color:var(--gold)">${fmtAuec(p.amount)}</span>
+          <span class="tag" style="background:${statusColor}22;border:1px solid ${statusColor}44;color:${statusColor};font-size:9px;text-transform:uppercase">${p.status}</span>
+          <div style="display:flex;gap:6px;margin-top:4px">
+            ${p.status === 'pending' && canApprove ? `<button class="btn sm green" onclick="approvePO('${id}')">Approve</button><button class="btn sm red" onclick="denyPO('${id}')">Deny</button>` : ''}
+            ${p.status === 'approved' && isMine ? `<button class="btn sm" style="border-color:var(--accent);color:var(--accent)" onclick="completePO('${id}')">Mark Complete</button>` : ''}
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+};
+
+window.approvePO = async function(id) {
+  const notes = prompt('Notes for submitter (optional):') || '';
+  const po = window._poData[id];
+  if (!po) return;
+  await update(ref(db, 'purchase_orders/' + id), {
+    status: 'approved', approvedBy: window._session.username,
+    approvedAt: Date.now(), docNotes: notes
+  });
+};
+
+window.denyPO = async function(id) {
+  const notes = prompt('Reason for denial:') || '';
+  await update(ref(db, 'purchase_orders/' + id), {
+    status: 'denied', deniedBy: window._session.username,
+    deniedAt: Date.now(), docNotes: notes
+  });
+};
+
+window.completePO = async function(id) {
+  const po = window._poData[id];
+  if (!po) return;
+  if (!confirm('Mark this PO as complete? This will subtract ' + fmtAuec(po.amount) + ' from your balance.')) return;
+
+  // Subtract from submitter's balance
+  const existing = Object.entries(window._treasuryData).find(([,b]) => b.username === po.submittedBy);
+  if (existing) {
+    const newBal = Math.max(0, (existing[1].balance || 0) - po.amount);
+    await update(ref(db, 'treasury/' + existing[0]), { balance: newBal, updatedAt: Date.now() });
+  }
+  await update(ref(db, 'purchase_orders/' + id), { status: 'complete', completedAt: Date.now() });
+};
+
 // ── Mining Plan ──
 window.buildMiningPlan = function(context) {
   const isOrg = context === 'org' || context === 'orgcrafting';
@@ -3580,6 +3837,20 @@ function normalizeMaterialName(name) {
     .toLowerCase().trim();
 }
 
+// Lagrange letter→in-game name mapping (confirmed)
+const LAGRANGE_NAME_MAP = {
+  'Lagrange A': 'Lagrange A (HUR-L1, HUR-L4)',
+  'Lagrange B': 'Lagrange B (ARC-L5, CRU-L4, MIC-L3)',
+  'Lagrange C': 'Lagrange C (HUR-L5, MIC-L1, MIC-L2, MIC-L5)',
+  'Lagrange D': 'Lagrange D (ARC-L3, CRU-L5, MIC-L4)',
+  'Lagrange E': 'Lagrange E (CRU-L1, CRU-L2, HUR-L3)',
+  'Lagrange F': 'Lagrange F (HUR-L2, ARC-L1, ARC-L2, ARC-L4)',
+};
+
+function friendlyLocationName(name) {
+  return LAGRANGE_NAME_MAP[name] || name;
+}
+
 function renderNeededList(needed, miningData) {
   const elements = miningData ? (miningData.mineableElements || {}) : {};
   const locations = miningData ? (miningData.locations || {}) : {};
@@ -3603,7 +3874,8 @@ function renderNeededList(needed, miningData) {
           if (!elemName) continue;
           if (!elementLocations[elemName]) elementLocations[elemName] = {};
           // Key by location to aggregate across deposits
-          const locKey = loc.locationName || loc.name || locId;
+          const rawName = loc.locationName || loc.name || locId;
+          const locKey = friendlyLocationName(rawName);
           if (!elementLocations[elemName][locKey]) {
             elementLocations[elemName][locKey] = {
               location: locKey,
