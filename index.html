@@ -490,6 +490,7 @@ label { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: 
       <button class="nav-tab active locked" onclick="showPage('dashboard')" id="tab-dashboard">Dashboard</button>
       <button class="nav-tab locked" onclick="showPage('events')" id="tab-events">Events</button>
       <button class="nav-tab" onclick="showPage('myinv')" id="tab-myinv">My Inventory</button>
+      <button class="nav-tab" onclick="showPage('help')" id="tab-help">? Help</button>
       <button class="nav-tab locked" id="tab-orgbank" onclick="showPage('orgbank')">Org Bank</button>
       <button class="nav-tab locked" id="tab-reqs" onclick="showPage('reqs')">Requisitions</button>
       <button class="nav-tab locked" id="tab-crafting" onclick="showPage('crafting')">Crafting</button>
@@ -974,6 +975,12 @@ label { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: 
   </div>
 </div>
 
+<!-- HELP PAGE -->
+<div class="page" id="page-help">
+  <div style="max-width:860px;margin:0 auto" id="helpContent">
+    <div class="empty">Loading guide...</div>
+  </div>
+</div>
 <!-- MODALS -->
 <div id="modalOverlay" style="display:none" class="modal-overlay" onclick="closeModal(event)">
   <div class="modal" id="modalBox">
@@ -1109,14 +1116,15 @@ function can(action) {
   const r = window._session?.role;
   switch (action) {
     case 'run_event':      return ['event_organizer','cld_leadership','director_of_commerce'].includes(r);
-    case 'view_events':    return ['event_organizer','general_leadership','cld_leadership','director_of_commerce'].includes(r);
-    case 'view_orgbank':   return ['general_leadership','cld_leadership','director_of_commerce'].includes(r);
+    case 'view_events':    return ['event_organizer','cld_leadership','director_of_commerce'].includes(r);
+    case 'view_orgbank':   return ['cld_leadership','director_of_commerce'].includes(r);
     case 'edit_orgbank':   return ['cld_leadership','director_of_commerce'].includes(r);
     case 'admin':          return ['cld_leadership','director_of_commerce'].includes(r);
     case 'approve_req':    return r === 'director_of_commerce';
-    case 'submit_req':     return ['cld_leadership','director_of_commerce'].includes(r);
-    case 'view_req':       return ['cld_leadership','director_of_commerce'].includes(r);
-    case 'view_dashboard': return ['general_leadership','cld_leadership','director_of_commerce'].includes(r);
+    case 'submit_req':     return ['general_leadership','cld_leadership','director_of_commerce'].includes(r);
+    case 'view_req':       return ['general_leadership','cld_leadership','director_of_commerce'].includes(r);
+    case 'view_all_reqs':  return ['cld_leadership','director_of_commerce'].includes(r);
+    case 'view_dashboard': return ['cld_leadership','director_of_commerce'].includes(r);
     case 'view_treasury':  return ['cld_leadership','director_of_commerce'].includes(r);
     case 'submit_po':      return ['cld_leadership','director_of_commerce'].includes(r);
     case 'approve_po':     return r === 'director_of_commerce';
@@ -1387,6 +1395,7 @@ function setupUI() {
   if (can('submit_req') || can('view_req')) document.getElementById('tab-reqs').classList.remove('locked');
   if (!can('submit_req')) { const b = document.getElementById('btn-new-req'); if (b) b.style.display = 'none'; }
   document.getElementById('tab-crafting').classList.remove('locked');
+  document.getElementById('tab-help').classList.remove('locked');
   if (can('edit_orgbank')) document.getElementById('tab-orgcrafting').classList.remove('locked');
   if (can('edit_orgbank')) {
     const distBtn = document.getElementById('btn-distribute');
@@ -1404,7 +1413,7 @@ function setupUI() {
 
 // ── Navigation ──
 window.showPage = function(page) {
-  const locked = { dashboard: !can('view_dashboard'), events: !can('view_events'), orgbank: !can('view_orgbank'), admin: !can('admin'), reqs: !can('submit_req') && !can('view_req'), crafting: false, orgcrafting: !can('edit_orgbank'), treasury: !can('view_treasury') };
+  const locked = { dashboard: !can('view_dashboard'), events: !can('view_events'), help: false, orgbank: !can('view_orgbank'), admin: !can('admin'), reqs: !can('submit_req') && !can('view_req'), crafting: false, orgcrafting: !can('edit_orgbank'), treasury: !can('view_treasury') };
   if (locked[page]) return;
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
@@ -1416,6 +1425,7 @@ window.showPage = function(page) {
   if (page === 'orgbank') renderOrgBank();
   if (page === 'myinv') renderMyInventory();
   if (page === 'admin') renderAdmin();
+  if (page === 'help') renderHelp();
   if (page === 'dashboard') renderDashboard();
   if (page === 'reqs') renderReqs();
   if (page === 'crafting') initCraftingTab('personal');
@@ -3138,7 +3148,7 @@ window.renderReqs = function() {
 
   let reqs = Object.entries(window._reqsData).filter(([, r]) => r.status === targetStatus);
   // Members only see their own
-  if (!isViewer) reqs = reqs.filter(([, r]) => r.submittedBy === myUsername);
+  if (!can('view_all_reqs')) reqs = reqs.filter(([, r]) => r.submittedBy === myUsername);
   reqs.sort((a,b) => (b[1].submittedAt||0) - (a[1].submittedAt||0));
 
   const el = document.getElementById('reqsList');
@@ -4057,6 +4067,144 @@ window.refreshBlueprintData = async function() {
   } finally {
     if (btn) { btn.textContent = '↻ Refresh Data'; btn.disabled = false; }
   }
+};
+
+// ── Help Page ──
+window.renderHelp = function() {
+  const el = document.getElementById('helpContent');
+  if (!el) return;
+
+  const r = window._session?.role;
+  const isMember     = true; // everyone gets base sections
+  const isEvOrg      = can('run_event');
+  const isCO         = can('view_orgbank');
+  const isDocOrCLD   = can('edit_orgbank');
+  const isAdmin      = can('admin');
+
+  const roleTag = (role, label, color, bg) =>
+    `<span class="tag" style="background:${bg};border:1px solid ${color}44;color:${color};font-size:9px">${label}</span>`;
+
+  const sectionRole = (label) =>
+    `<div style="font-size:9px;color:var(--text3);margin-bottom:8px;letter-spacing:1px">VISIBLE TO: ${label}</div>`;
+
+  let html = `<div class="section-title" style="margin-bottom:24px"><div class="dot" style="background:var(--accent)"></div> TBSI CLD Tools — User Guide</div>`;
+
+  // ── Access Levels (everyone) ──
+  html += `<div class="card" style="margin-bottom:20px">
+    <div class="section-title" style="font-size:9px;margin-bottom:12px"><div class="dot" style="background:var(--purple)"></div> Access Levels</div>
+    <table class="tbl"><thead><tr><th>Role</th><th>Areas</th><th>Can Do</th></tr></thead><tbody>
+      <tr><td><span class="tag" style="background:var(--accent-dim);border:1px solid rgba(0,200,240,0.2);color:var(--accent);font-size:9px">Member</span></td><td>My Inventory, Crafting</td><td>Log hauls, trade items, plan crafts, view mining locations</td></tr>
+      <tr><td><span class="tag" style="background:var(--accent-dim);border:1px solid rgba(0,200,240,0.2);color:var(--accent);font-size:9px">NCO</span></td><td>My Inventory, Crafting</td><td>Same as Member</td></tr>
+      <tr><td><span class="tag" style="background:rgba(255,112,32,0.1);border:1px solid rgba(255,112,32,0.2);color:var(--orange);font-size:9px">Event Organizer</span></td><td>+ Events</td><td>Create &amp; run events, log attendance &amp; materials</td></tr>
+      <tr><td><span class="tag" style="background:rgba(0,232,152,0.1);border:1px solid rgba(0,232,152,0.2);color:var(--green);font-size:9px">C.O.</span></td><td>+ Dashboard, Org Bank (view)</td><td>View org bank and distribution log</td></tr>
+      <tr><td><span class="tag" style="background:rgba(255,192,64,0.1);border:1px solid rgba(255,192,64,0.2);color:var(--gold);font-size:9px">Dir. of Commerce</span></td><td>+ Requisitions, Org Crafting, Treasury</td><td>Approve reqs &amp; POs, distribute from org bank, manage treasury</td></tr>
+      <tr><td><span class="tag" style="background:rgba(255,64,96,0.1);border:1px solid rgba(255,64,96,0.2);color:var(--red);font-size:9px">CLD Leadership</span></td><td>+ Admin</td><td>Everything — member management, all data, refresh data caches</td></tr>
+    </tbody></table>
+  </div>`;
+
+  // ── My Inventory (everyone) ──
+  html += `<div class="card" style="margin-bottom:20px">
+    <div class="section-title" style="font-size:9px;margin-bottom:4px"><div class="dot" style="background:var(--green)"></div> My Inventory</div>
+    ${sectionRole('All roles')}
+    <p style="font-size:12px;color:var(--text2);margin-bottom:12px">Your personal stash — private and only visible to you.</p>
+    <table class="tbl"><thead><tr><th>Action</th><th>How</th></tr></thead><tbody>
+      <tr><td>Log a haul</td><td>Click <strong>+ Log Haul</strong>. Search for the item/material, set quantity and quality (materials only). Type auto-fills from UEX — commodities = Material, gear = Item.</td></tr>
+      <tr><td>Trade to another member</td><td>Click <strong>⇄ Trade</strong>. Pick your item, enter quantity, select recipient. If they're a registered member it adds to their inventory automatically.</td></tr>
+      <tr><td>Donate to org bank</td><td>Click <strong>Donate</strong> on any row. CLD Leadership reviews and approves donations.</td></tr>
+      <tr><td>Quality grades</td><td>Any = 0–249 · Standard = 250–499 · High = 500–749 · Prime = 750–999.</td></tr>
+      <tr><td>Gems</td><td>Check the Gem box for Aphorite, Beradom, Carinite, Dolivine, Hadanite, Janalite, Sadaryx, Saldynium — marks them splittable for distributions.</td></tr>
+    </tbody></table>
+  </div>`;
+
+  // ── Crafting (everyone) ──
+  html += `<div class="card" style="margin-bottom:20px">
+    <div class="section-title" style="font-size:9px;margin-bottom:4px"><div class="dot" style="background:var(--accent)"></div> Crafting</div>
+    ${sectionRole('All roles')}
+    <p style="font-size:12px;color:var(--text2);margin-bottom:12px">Personal Crafting checks your own inventory. Org Crafting (CLD/DoC) checks the org bank.</p>
+    <table class="tbl"><thead><tr><th>Tab</th><th>What It Does</th></tr></thead><tbody>
+      <tr><td><strong>Blueprints</strong></td><td>Browse all SCMDB blueprints. Expand any to see slot requirements, quality thresholds, and a live quality calculator showing exact stat modifiers based on your logged material quality.</td></tr>
+      <tr><td><strong>Planner</strong></td><td>Add blueprints to your queue. Shopping list shows what you need, what you have, your quality, and stock status.</td></tr>
+      <tr><td><strong>Jobs</strong></td><td>Create jobs from your plan. Track status: Planning → Committed → In Progress → Complete.</td></tr>
+      <tr><td><strong>⛏ Mining Plan</strong></td><td>Click <strong>Build Mining Plan</strong> to generate a sourcing guide for all NEEDED materials across active jobs. Shows rarity, instability, resistance, scan sig, and top locations by system ranked by spawn chance.</td></tr>
+    </tbody></table>
+    <div style="margin-top:10px;font-size:11px;color:var(--text2)"><strong>Lagrange reference (Stanton):</strong> A = HUR-L1/L4 · B = ARC-L5/CRU-L4/MIC-L3 · C = HUR-L5/MIC-L1/L2/L5 · D = ARC-L3/CRU-L5/MIC-L4 · E = CRU-L1/L2/HUR-L3 · F = HUR-L2/ARC-L1/L2/L4</div>
+  </div>`;
+
+  // ── Events (Event Organizer+) ──
+  if (isEvOrg) {
+    html += `<div class="card" style="margin-bottom:20px">
+      <div class="section-title" style="font-size:9px;margin-bottom:4px"><div class="dot" style="background:var(--orange)"></div> Events</div>
+      ${sectionRole('Event Organizer, C.O., DoC, CLD Leadership')}
+      <p style="font-size:12px;color:var(--text2);margin-bottom:12px">5-phase workflow for running org events and distributing proceeds.</p>
+      <table class="tbl"><thead><tr><th>Phase</th><th>What Happens</th></tr></thead><tbody>
+        <tr><td><strong>1 · Setup</strong></td><td>Name the event, pick a type, add notes.</td></tr>
+        <tr><td><strong>2 · Attendance</strong></td><td>Paste the Discord bot log. Parser reads the format automatically and calculates share weights based on time. Set a minimum threshold (default 30 min).</td></tr>
+        <tr><td><strong>3 · Materials</strong></td><td>Search and add everything collected. Set quantity, quality (materials), and type. Gems get the Gem checkbox.</td></tr>
+        <tr><td><strong>4 · Review</strong></td><td>Auto-calculates fair shares via largest remainder method. Adjust allocations manually if needed. Then:<br>• <strong>Publish & Distribute</strong> — runs allocations, adds shares to member inventories<br>• <strong>Publish → Org Held</strong> — skips allocations, puts everything in org bank as stockpile</td></tr>
+        <tr><td><strong>5 · Done</strong></td><td>Event published. Materials appear in Org Bank.</td></tr>
+      </tbody></table>
+    </div>`;
+  }
+
+  // ── Org Bank (C.O.+) ──
+  if (isCO) {
+    html += `<div class="card" style="margin-bottom:20px">
+      <div class="section-title" style="font-size:9px;margin-bottom:4px"><div class="dot" style="background:var(--gold)"></div> Org Bank</div>
+      ${sectionRole('C.O., DoC, CLD Leadership')}
+      <p style="font-size:12px;color:var(--text2);margin-bottom:12px">The org shared inventory. C.O. can view. CLD Leadership and DoC can add and distribute.</p>
+      <table class="tbl"><thead><tr><th>Tab</th><th>What It Shows</th></tr></thead><tbody>
+        <tr><td><strong>Undistributed</strong></td><td>Everything waiting to be distributed, grouped by event. Click <strong>Allocate</strong> to distribute to members — select from dropdown, enter qty. Members automatically receive items in their personal inventory.</td></tr>
+        <tr><td><strong>Distribution Log</strong></td><td>Full history of everything distributed. CLD/DoC can click <strong>+ Distribute</strong> to manually distribute any undistributed entry.</td></tr>
+        <tr><td><strong>Donation Requests</strong></td><td>Members can donate personal inventory items. CLD/DoC approve or reject here.</td></tr>
+        ${isDocOrCLD ? `<tr><td><strong>💰 Treasury</strong></td><td>Tracks aUEC held by each leadership member. Submit purchase orders for DoC approval. Completed POs auto-subtract from the submitter's balance.</td></tr>` : ''}
+      </tbody></table>
+      <div style="margin-top:10px;font-size:11px;color:var(--text2)"><strong>Statuses:</strong> Undistributed → Committed → Distributed → Spent → Org Held</div>
+    </div>`;
+  }
+
+  // ── Requisitions (DoC / CLD) ──
+  if (can('submit_req')) {
+    html += `<div class="card" style="margin-bottom:20px">
+      <div class="section-title" style="font-size:9px;margin-bottom:4px"><div class="dot" style="background:var(--purple)"></div> Requisitions</div>
+      ${sectionRole('C.O., DoC, CLD Leadership')}
+      <p style="font-size:12px;color:var(--text2);margin-bottom:12px">Request items from the org bank or external sourcing. DoC approves; CLD Leadership marks fulfilled.</p>
+      <table class="tbl"><thead><tr><th>Step</th><th>How</th></tr></thead><tbody>
+        <tr><td>Submit a req</td><td>Click <strong>+ New Requisition</strong>. Search items via UEX, add to list with quantities, set priority and notes.</td></tr>
+        <tr><td>Bank check</td><td>Each item auto-checks org bank — shows IN STOCK / PARTIAL / NEEDS SOURCING.</td></tr>
+        <tr><td>Find sourcing</td><td>Click <strong>Find Sourcing Locations</strong> to pull live UEX price data and see where to buy in-game, clustered by terminal proximity.</td></tr>
+        <tr><td>Approval</td><td>DoC approves or denies with optional notes. CLD Leadership or DoC marks Fulfilled once delivered.</td></tr>
+      </tbody></table>
+    </div>`;
+  }
+
+  // ── Admin (CLD only) ──
+  if (isAdmin) {
+    html += `<div class="card" style="margin-bottom:20px">
+      <div class="section-title" style="font-size:9px;margin-bottom:4px"><div class="dot" style="background:var(--red)"></div> Admin</div>
+      ${sectionRole('CLD Leadership')}
+      <table class="tbl"><thead><tr><th>Section</th><th>What It Does</th></tr></thead><tbody>
+        <tr><td><strong>Pending Requests</strong></td><td>New access requests show here with a red badge. Select a role, click Approve — a temp password is generated to send via Discord. Member must change it on first login.</td></tr>
+        <tr><td><strong>Enrolled Members</strong></td><td>Full member list with last seen dates. 90+ day inactive members get an orange INACTIVE badge. Change roles inline. Reset Password generates a new temp password. Deactivate blocks login without deleting data. Revoke permanently removes the member.</td></tr>
+        <tr><td><strong>Data Refresh</strong></td><td>↻ Blueprints — fetches latest from SCMDB, saves to Firebase for everyone.<br>↻ Item Catalog — fetches all UEX items/commodities. Only needed after major patches.<br>↻ Mining Data — fetches SCMDB mining element and location data.</td></tr>
+        <tr><td><strong>UEX Token</strong></td><td>Paste your UEX API token here to enable item catalog and sourcing lookups.</td></tr>
+      </tbody></table>
+    </div>`;
+  }
+
+  // ── Tips (everyone) ──
+  html += `<div class="card" style="margin-bottom:20px">
+    <div class="section-title" style="font-size:9px;margin-bottom:4px"><div class="dot" style="background:var(--green)"></div> Tips & Notes</div>
+    ${sectionRole('All roles')}
+    <div style="font-size:12px;color:var(--text2);line-height:1.8">
+      <div style="margin-bottom:8px">• All data is stored in Firebase — changes appear live for everyone without refreshing.</div>
+      <div style="margin-bottom:8px">• Blueprint, item catalog, and mining data are cached in Firebase. CLD Leadership refreshes them after major patches — everyone else reads from cache.</div>
+      <div style="margin-bottom:8px">• The tool auto-detects Item vs Material type when you search via UEX. Commodities = Materials, gear = Items. Items don't need quality. Gems are Materials but splittable — check the Gem box.</div>
+      <div style="margin-bottom:8px">• Your session persists across page refreshes — you won't need to log in again unless you explicitly log out.</div>
+      <div>• If an item isn't showing in search, ask CLD Leadership to refresh the Item Catalog in Org Crafting.</div>
+    </div>
+  </div>`;
+
+  el.innerHTML = html;
 };
 
 // ── Treasury ──
