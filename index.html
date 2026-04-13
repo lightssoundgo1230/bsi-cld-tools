@@ -660,7 +660,8 @@ label { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: 
           <div id="reviewContent"></div>
           <div class="btn-row">
             <button class="btn sm" onclick="evPhase(3)">← Back</button>
-            <button class="btn gold" onclick="publishEvent()">Publish &amp; Send to Org Bank →</button>
+            <button class="btn gold" onclick="publishEvent(false)">Publish &amp; Distribute →</button>
+            <button class="btn" style="border-color:var(--gold);color:var(--gold)" onclick="publishEvent(true)">Publish → Org Held (skip allocations)</button>
           </div>
         </div>
       </div>
@@ -1582,9 +1583,13 @@ window.showNewEvent = function() {
   document.getElementById('evName').value = '';
   document.getElementById('evNotes').value = '';
   document.getElementById('evBotLog').value = '';
-  document.getElementById('matName').value = '';
-  document.getElementById('matQty').value = '';
-  document.getElementById('matQual').value = '';
+  document.getElementById('matSearch') && (document.getElementById('matSearch').value = '');
+  document.getElementById('matQty') && (document.getElementById('matQty').value = '');
+  document.getElementById('matQual') && (document.getElementById('matQual').value = '');
+  window._evSelectedMat = null;
+  window._evMatSearchResults = [];
+  const selEl = document.getElementById('matSelectedItem');
+  if (selEl) { selEl.style.display = 'none'; selEl.textContent = ''; }
   // Clear rendered content
   document.getElementById('attBody').innerHTML = '';
   document.getElementById('attPreview').style.display = 'none';
@@ -1825,7 +1830,7 @@ window.updateAlloc = function(username, matName, val) {
   window._evAllocations[username][matName] = parseFloat(val) || 0;
 };
 
-window.publishEvent = async function() {
+window.publishEvent = async function(orgHeld = false) {
   const name = document.getElementById('evName').value.trim() || 'Unnamed Event';
   const type = document.getElementById('evType').value;
   const notes = document.getElementById('evNotes').value.trim();
@@ -1860,35 +1865,52 @@ window.publishEvent = async function() {
       const qty = matMap[mat.name] || 0;
       if (qty > 0) allocations[username] = qty;
     }
-    if (Object.keys(allocations).length === 0) continue;
-    await push(ref(db, 'org_bank'), {
-      materialName: mat.name,
-      totalQty: mat.qty,
-      quality: mat.qual || 0,
-      splittable: mat.splittable || false,
-      itemType: mat.itemType || 'material',
-      allocations,
-      sourceEvent: name,
-      sourceEventId: eventId,
-      status: 'undistributed',
-      loggedBy: window._session.username,
-      loggedAt: Date.now()
-    });
+    if (!orgHeld && Object.keys(allocations).length === 0) continue;
+    if (orgHeld) {
+      // Skip allocations — just add everything to org bank as org_held
+      await push(ref(db, 'org_bank'), {
+        materialName: mat.name,
+        totalQty: mat.qty,
+        quality: mat.qual || 0,
+        splittable: mat.splittable || false,
+        itemType: mat.itemType || 'material',
+        allocations: {},
+        sourceEvent: name,
+        sourceEventId: eventId,
+        status: 'org_held',
+        loggedBy: window._session.username,
+        loggedAt: Date.now()
+      });
+    } else {
+      await push(ref(db, 'org_bank'), {
+        materialName: mat.name,
+        totalQty: mat.qty,
+        quality: mat.qual || 0,
+        splittable: mat.splittable || false,
+        itemType: mat.itemType || 'material',
+        allocations,
+        sourceEvent: name,
+        sourceEventId: eventId,
+        status: 'undistributed',
+        loggedBy: window._session.username,
+        loggedAt: Date.now()
+      });
 
-    // Add allocated quantities to member personal inventories
-    for (const [username, qty] of Object.entries(allocations)) {
-      const memberEntry = Object.entries(window._membersData || {}).find(([,m]) => m.username === username);
-      if (memberEntry) {
-        const [memberId] = memberEntry;
-        await push(ref(db, 'personal_inventory/' + memberId), {
-          materialName: mat.name,
-          qty,
-          quality: mat.qual || 0,
-          itemType: mat.itemType || 'material',
-          splittable: mat.splittable || false,
-          notes: 'Allocated from event: ' + name,
-          loggedAt: Date.now()
-        });
+      // Add allocated quantities to member personal inventories
+      for (const [username, qty] of Object.entries(allocations)) {
+        const memberEntry = Object.entries(window._membersData || {}).find(([,m]) => m.username === username);
+        if (memberEntry) {
+          const [memberId] = memberEntry;
+          await push(ref(db, 'personal_inventory/' + memberId), {
+            materialName: mat.name,
+            qty,
+            quality: mat.qual || 0,
+            itemType: mat.itemType || 'material',
+            splittable: mat.splittable || false,
+            notes: 'Allocated from event: ' + name,
+            loggedAt: Date.now()
+          });
+        }
       }
     }
   }
@@ -2805,7 +2827,7 @@ window.showAddToBankModal = function() {
       </div>
     </div>
     <div class="grid2">
-      <div class="field"><label>Quantity</label><input type="number" id="atb-qty" placeholder="10" min="1" step="1"></div>
+      <div class="field"><label>Quantity</label><input type="number" id="atb-qty" placeholder="10" min="0.01" step="0.01"></div>
       <div class="field"><label>Quality (1-999, optional for items)</label><input type="number" id="atb-qual" placeholder="500" min="1" max="999"></div>
     </div>
     <div class="field"><label>Source / Origin</label><input type="text" id="atb-source" placeholder="Pre-3.24 stockpile, Admin add..."></div>
@@ -2876,7 +2898,7 @@ window.atbClearItem = function() {
 window.submitAddToBank = async function() {
   const name = window._atbSelectedItem ? window._atbSelectedItem.name : '';
   if (!name) { alert('Search and select a material first.'); return; }
-  const qty = parseInt(document.getElementById('atb-qty').value);
+  const qty = parseFloat(document.getElementById('atb-qty').value);
   const isItemType = document.getElementById('atbTypeItem')?.checked;
   const qual = parseInt(document.getElementById('atb-qual')?.value) || 0;
   const splittable = isItemType ? true : (document.getElementById('atbSplitGem')?.checked || false);
