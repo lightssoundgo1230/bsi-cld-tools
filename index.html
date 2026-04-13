@@ -3672,16 +3672,22 @@ window.submitBalanceUpdate = async function() {
 
 window.showNewPOModal = function() {
   if (!can('submit_po')) return;
+  window._poSelectedItems = [];
   const username = window._session.username;
   const myBalance = Object.values(window._treasuryData).find(b => b.username === username)?.balance || 0;
 
   document.getElementById('modalTitle').textContent = 'NEW PURCHASE ORDER';
   document.getElementById('modalBody').innerHTML = `
     <div class="notice info" style="margin-bottom:16px">Your current balance: <strong style="color:var(--gold)">${fmtAuec(myBalance)}</strong></div>
+    <div id="po-catalog-status" class="notice info" style="margin-bottom:10px;display:none">Loading item catalog...</div>
     <div class="field">
-      <label>Item(s) Purchased</label>
-      <input type="text" id="po-items" placeholder="e.g. 50 SCU Taranite, ship components...">
+      <label>Search & Add Items</label>
+      <div style="display:flex;gap:8px">
+        <input type="text" id="po-search" placeholder="Search Taranite, P4-AR, armor..." oninput="poItemSearch()" style="flex:1" disabled>
+      </div>
+      <div id="po-search-results" style="max-height:140px;overflow-y:auto;margin-top:6px"></div>
     </div>
+    <div id="po-items-list" style="margin-bottom:14px"></div>
     <div class="field">
       <label>Amount Spent (aUEC)</label>
       <input type="number" id="po-amount" min="1" step="1" placeholder="0" style="font-family:'Orbitron',sans-serif">
@@ -3695,20 +3701,100 @@ window.showNewPOModal = function() {
       <button class="btn sm" onclick="closeModalDirect()">Cancel</button>
     </div>`;
   document.getElementById('modalOverlay').style.display = 'flex';
+
+  if (!window._uexCacheReady) {
+    const statusEl = document.getElementById('po-catalog-status');
+    const searchEl = document.getElementById('po-search');
+    if (statusEl) statusEl.style.display = '';
+    loadUexCatalog(msg => {
+      if (msg === 'ready') {
+        if (statusEl) statusEl.style.display = 'none';
+        if (searchEl) searchEl.disabled = false;
+      } else if (msg === 'no_cache') {
+        if (statusEl) { statusEl.className = 'notice warn'; statusEl.textContent = 'Item catalog not cached. Ask CLD Leadership to refresh.'; }
+      } else if (statusEl) statusEl.textContent = msg;
+    }).catch(() => {});
+  } else {
+    const searchEl = document.getElementById('po-search');
+    if (searchEl) searchEl.disabled = false;
+  }
 };
 
+window._poSelectedItems = [];
+window._poSearchResults = [];
+
+window.poItemSearch = function() {
+  const q = document.getElementById('po-search')?.value.trim();
+  const resultsEl = document.getElementById('po-search-results');
+  if (!q || q.length < 2 || !window._uexCacheReady) { if (resultsEl) resultsEl.innerHTML = ''; return; }
+  const results = searchUexCached(q);
+  window._poSearchResults = results;
+  if (!resultsEl) return;
+  resultsEl.innerHTML = results.map((item, idx) => `
+    <div style="display:flex;align-items:center;gap:10px;padding:6px 10px;border-bottom:1px solid var(--border);cursor:pointer"
+      onmouseover="this.style.background='rgba(160,96,255,0.05)'" onmouseout="this.style.background=''"
+      onclick="poAddItem(${idx})">
+      <div style="flex:1">
+        <div style="font-size:12px">${item.name}</div>
+        <div style="font-size:10px;color:var(--text2)">${item._type === 'commodity' ? 'Commodity' : (item.category_name || 'Item')}</div>
+      </div>
+      <button class="btn sm" style="border-color:var(--purple);color:var(--purple);pointer-events:none">+</button>
+    </div>`).join('');
+};
+
+window.poAddItem = function(idx) {
+  const item = (window._poSearchResults || [])[idx];
+  if (!item) return;
+  // Allow duplicates — user might buy same item multiple times
+  window._poSelectedItems.push({ name: item.name, qty: 1 });
+  document.getElementById('po-search-results').innerHTML = '';
+  document.getElementById('po-search').value = '';
+  renderPOItemsList();
+};
+
+window.poRemoveItem = function(idx) {
+  window._poSelectedItems.splice(idx, 1);
+  renderPOItemsList();
+};
+
+window.poUpdateQty = function(idx, val) {
+  if (window._poSelectedItems[idx]) window._poSelectedItems[idx].qty = parseFloat(val) || 1;
+};
+
+function renderPOItemsList() {
+  const el = document.getElementById('po-items-list');
+  if (!el) return;
+  if (!window._poSelectedItems.length) { el.innerHTML = ''; return; }
+  el.innerHTML = `<div style="background:var(--panel2);border:1px solid var(--border);padding:8px 12px;margin-bottom:6px">
+    <div style="font-size:9px;letter-spacing:2px;color:var(--text2);text-transform:uppercase;margin-bottom:8px">Items to Purchase</div>
+    ${window._poSelectedItems.map((item, i) => `
+      <div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid rgba(26,45,63,0.3)">
+        <span style="flex:1;font-size:12px">${item.name}</span>
+        <input type="number" value="${item.qty}" min="0.01" step="0.01" style="width:70px;font-size:11px"
+          onchange="poUpdateQty(${i}, this.value)" title="Quantity">
+        <button onclick="poRemoveItem(${i})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px">×</button>
+      </div>`).join('')}
+  </div>`;
+}
+
 window.submitPO = async function() {
-  const items = document.getElementById('po-items')?.value.trim();
+  const items = window._poSelectedItems || [];
   const amount = parseInt(document.getElementById('po-amount')?.value) || 0;
   const reason = document.getElementById('po-reason')?.value.trim();
-  if (!items || amount <= 0 || !reason) { alert('Fill in all fields.'); return; }
+  if (!items.length) { alert('Add at least one item.'); return; }
+  if (amount <= 0) { alert('Enter the amount spent.'); return; }
+  if (!reason) { alert('Enter a reason/purpose.'); return; }
 
+  const itemsSummary = items.map(i => `${i.qty > 1 ? i.qty + 'x ' : ''}${i.name}`).join(', ');
   await push(ref(db, 'purchase_orders'), {
     submittedBy: window._session.username,
-    items, amount, reason,
+    items: itemsSummary,
+    itemsList: items,
+    amount, reason,
     status: 'pending',
     submittedAt: Date.now()
   });
+  window._poSelectedItems = [];
   closeModalDirect();
 };
 
