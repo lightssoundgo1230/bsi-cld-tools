@@ -620,11 +620,17 @@ label { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: 
       <div id="evPhase3" style="display:none">
         <div class="card">
           <div class="section-title" style="font-size:9px"><div class="dot" style="background:var(--orange)"></div> Add Material</div>
-          <div style="display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:10px;align-items:end">
-            <div class="field" style="margin:0"><label>Name</label><input type="text" id="matName" placeholder="Quantanium, P4-AR Magazine..."></div>
+          <div id="ev-catalog-status" class="notice info" style="margin-bottom:10px;display:none">Loading item catalog...</div>
+          <div style="display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:10px;align-items:start">
+            <div style="margin:0">
+              <label style="font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--text2)">Search Item / Material</label>
+              <input type="text" id="matSearch" placeholder="Quantanium, P4-AR..." oninput="evMatSearch()" disabled style="width:100%">
+              <div id="matSearchResults" style="max-height:130px;overflow-y:auto;position:relative;z-index:10;background:var(--panel2);border:1px solid var(--border);display:none"></div>
+              <div id="matSelectedItem" style="display:none;margin-top:4px;font-size:11px;color:var(--accent)"></div>
+            </div>
             <div class="field" style="margin:0"><label>Quantity</label><input type="number" id="matQty" placeholder="12" min="0.01" step="0.01"></div>
-            <div class="field" style="margin:0"><label>Quality (1-999)</label><input type="number" id="matQual" placeholder="500" min="1" max="999" id="matQual"></div>
-            <button class="btn orange" style="height:36px;padding:0 16px;margin-bottom:0" onclick="addMaterial()">+</button>
+            <div class="field" style="margin:0"><label>Quality (1-999)</label><input type="number" id="matQual" placeholder="500" min="1" max="999"></div>
+            <button class="btn orange" style="height:36px;padding:0 16px;margin-top:20px" onclick="addMaterial()">+</button>
           </div>
           <div style="display:flex;gap:20px;margin-top:10px;align-items:center;flex-wrap:wrap">
             <div style="font-size:10px;letter-spacing:1px;color:var(--text2);text-transform:uppercase">Type</div>
@@ -1607,6 +1613,24 @@ window.evPhase = function(n) {
     }
   }
   if (n === 4) buildReview();
+  if (n === 3) {
+    // Load UEX catalog when entering materials phase
+    const statusEl = document.getElementById('ev-catalog-status');
+    const searchEl = document.getElementById('matSearch');
+    if (!window._uexCacheReady) {
+      if (statusEl) statusEl.style.display = '';
+      loadUexCatalog(msg => {
+        if (msg === 'ready') {
+          if (statusEl) statusEl.style.display = 'none';
+          if (searchEl) searchEl.disabled = false;
+        } else if (msg === 'no_cache') {
+          if (statusEl) { statusEl.className = 'notice warn'; statusEl.textContent = 'Item catalog not cached. Ask CLD Leadership to refresh in Org Crafting.'; }
+        } else if (statusEl) statusEl.textContent = msg;
+      }).catch(() => {});
+    } else {
+      if (searchEl) searchEl.disabled = false;
+    }
+  }
 };
 
 window.parseAttendance = function() {
@@ -1650,8 +1674,45 @@ window.parseAttendance = function() {
   document.getElementById('attPreview').style.display = '';
 };
 
+window._evSelectedMat = null;
+window._evMatSearchResults = [];
+
+window.evMatSearch = function() {
+  const q = document.getElementById('matSearch')?.value.trim();
+  const resultsEl = document.getElementById('matSearchResults');
+  if (!q || q.length < 2 || !window._uexCacheReady) {
+    if (resultsEl) resultsEl.style.display = 'none';
+    return;
+  }
+  const results = searchUexCached(q);
+  window._evMatSearchResults = results;
+  if (!resultsEl) return;
+  if (!results.length) { resultsEl.style.display = 'none'; return; }
+  resultsEl.style.display = '';
+  resultsEl.innerHTML = results.map((item, idx) => `
+    <div style="display:flex;align-items:center;gap:10px;padding:6px 10px;border-bottom:1px solid var(--border);cursor:pointer"
+      onmouseover="this.style.background='rgba(255,152,0,0.07)'" onmouseout="this.style.background=''"
+      onclick="evMatSelect(${idx})">
+      <div style="flex:1"><div style="font-size:12px">${item.name}</div>
+      <div style="font-size:10px;color:var(--text2)">${item._type === 'commodity' ? 'Commodity' : (item.category_name || 'Item')}</div></div>
+    </div>`).join('');
+};
+
+window.evMatSelect = function(idx) {
+  const item = (window._evMatSearchResults || [])[idx];
+  if (!item) return;
+  window._evSelectedMat = item;
+  const searchEl = document.getElementById('matSearch');
+  const resultsEl = document.getElementById('matSearchResults');
+  const selEl = document.getElementById('matSelectedItem');
+  if (searchEl) searchEl.value = '';
+  if (resultsEl) resultsEl.style.display = 'none';
+  if (selEl) { selEl.style.display = ''; selEl.textContent = '✓ ' + item.name; }
+  applyTypeToForm(item, 'mat');
+};
+
 window.onMatTypeChange = function(ctx) {
-  const isItem = document.getElementById(ctx === 'ev' ? 'matTypeItem' : 'matTypeItem').checked;
+  const isItem = document.getElementById('matTypeItem')?.checked;
   const qualField = document.getElementById('matQual');
   const gemWrap = document.getElementById('matGemWrap');
   if (qualField) qualField.style.opacity = isItem ? '0.4' : '1';
@@ -1659,22 +1720,33 @@ window.onMatTypeChange = function(ctx) {
 };
 
 window.addMaterial = function() {
-  const name = document.getElementById('matName').value.trim();
+  const selectedItem = window._evSelectedMat;
+  const name = selectedItem ? selectedItem.name : '';
+  if (!name) { alert('Search and select an item first.'); return; }
+
   const qty = parseFloat(document.getElementById('matQty').value);
   const isItem = document.getElementById('matTypeItem')?.checked;
   const qual = isItem ? 0 : parseInt(document.getElementById('matQual').value);
   const splittable = isItem ? true : (document.getElementById('matSplitGem')?.checked || false);
   const itemType = isItem ? 'item' : 'material';
 
-  if (!name || isNaN(qty) || qty <= 0) return;
+  if (isNaN(qty) || qty <= 0) { alert('Enter a valid quantity.'); return; }
   if (!isItem && (isNaN(qual) || qual < 1 || qual > 999)) { alert('Quality must be between 1 and 999 for materials.'); return; }
+
   window._evMaterials.push({ name, qty, qual, splittable, itemType });
-  document.getElementById('matName').value = '';
+
+  // Reset form
+  window._evSelectedMat = null;
+  document.getElementById('matSearch').value = '';
   document.getElementById('matQty').value = '';
   document.getElementById('matQual').value = '';
   document.getElementById('matTypeMaterial').checked = true;
-  if (document.getElementById('matSplitGem')) document.getElementById('matSplitGem').checked = false;
-  if (document.getElementById('matGemWrap')) document.getElementById('matGemWrap').style.display = 'flex';
+  const selEl = document.getElementById('matSelectedItem');
+  if (selEl) { selEl.style.display = 'none'; selEl.textContent = ''; }
+  const gemWrap = document.getElementById('matGemWrap');
+  if (gemWrap) gemWrap.style.display = 'flex';
+  const gemCheck = document.getElementById('matSplitGem');
+  if (gemCheck) gemCheck.checked = false;
   renderEvMaterials();
 };
 
@@ -1802,6 +1874,23 @@ window.publishEvent = async function() {
       loggedBy: window._session.username,
       loggedAt: Date.now()
     });
+
+    // Add allocated quantities to member personal inventories
+    for (const [username, qty] of Object.entries(allocations)) {
+      const memberEntry = Object.entries(window._membersData || {}).find(([,m]) => m.username === username);
+      if (memberEntry) {
+        const [memberId] = memberEntry;
+        await push(ref(db, 'personal_inventory/' + memberId), {
+          materialName: mat.name,
+          qty,
+          quality: mat.qual || 0,
+          itemType: mat.itemType || 'material',
+          splittable: mat.splittable || false,
+          notes: 'Allocated from event: ' + name,
+          loggedAt: Date.now()
+        });
+      }
+    }
   }
 
   evPhase(5);
@@ -1910,19 +1999,20 @@ function applyTypeToForm(item, prefix) {
   const isItem = type === 'item';
   const gem = !isItem && isGem(item.name);
 
-  // Set radio
-  const matRadio = document.getElementById(prefix + 'TypeMaterial');
-  const itemRadio = document.getElementById(prefix + 'TypeItem');
+  // Event form uses different IDs (matTypeMaterial etc.)
+  const idPrefix = prefix === 'mat' ? 'mat' : prefix;
+  const matRadio = prefix === 'mat' ? document.getElementById('matTypeMaterial') : document.getElementById(prefix + 'TypeMaterial');
+  const itemRadio = prefix === 'mat' ? document.getElementById('matTypeItem') : document.getElementById(prefix + 'TypeItem');
   if (matRadio) matRadio.checked = !isItem;
   if (itemRadio) itemRadio.checked = isItem;
 
-  // Quality field opacity
-  const qualField = document.getElementById(prefix + 'Qual');
+  // Quality field
+  const qualField = prefix === 'mat' ? document.getElementById('matQual') : document.getElementById(prefix + 'Qual');
   if (qualField) qualField.style.opacity = isItem ? '0.4' : '1';
 
   // Gem checkbox
-  const gemWrap = document.getElementById(prefix + 'GemWrap');
-  const gemCheck = document.getElementById(prefix + 'SplitGem');
+  const gemWrap = prefix === 'mat' ? document.getElementById('matGemWrap') : document.getElementById(prefix + 'GemWrap');
+  const gemCheck = prefix === 'mat' ? document.getElementById('matSplitGem') : document.getElementById(prefix + 'SplitGem');
   if (gemWrap) gemWrap.style.display = isItem ? 'none' : 'flex';
   if (gemCheck) gemCheck.checked = gem;
 }
@@ -2545,12 +2635,31 @@ window.showAllocateModal = function(entryId) {
 };
 
 function allocRowHtml(i, user, qty) {
-  return `<div class="review-alloc-row" id="allocrow_${i}" style="margin-bottom:8px">
-    <input type="text" placeholder="Discord username" value="${user}" id="alloc-user-${i}" style="flex:2">
-    <input type="number" placeholder="qty" value="${qty}" id="alloc-qty-${i}" min="0" step="1" style="flex:1;max-width:90px">
+  const members = Object.values(window._membersData || {})
+    .filter(m => m.active !== false)
+    .sort((a,b) => a.username.localeCompare(b.username));
+  const memberOpts = members.map(m => `<option value="${m.username}" ${m.username===user?'selected':''}>${m.username}</option>`).join('');
+  const isOther = user && !members.find(m => m.username === user);
+  return `<div class="review-alloc-row" id="allocrow_${i}" style="margin-bottom:8px;flex-wrap:wrap;gap:6px">
+    <select id="alloc-user-sel-${i}" onchange="onAllocUserChange(${i})" style="flex:2;min-width:140px">
+      <option value="">— Select member —</option>
+      ${memberOpts}
+      <option value="__other__" ${isOther?'selected':''}>Other</option>
+    </select>
+    <input type="text" id="alloc-user-${i}" placeholder="Name/callsign" value="${isOther?user:''}"
+      style="flex:1.5;min-width:100px;display:${isOther?'':'none'}" >
+    <input type="number" placeholder="qty" value="${qty}" id="alloc-qty-${i}" min="0.01" step="0.01" style="flex:1;max-width:90px">
     <button class="btn sm red" onclick="removeAllocRow(${i})" style="flex-shrink:0">×</button>
   </div>`;
 }
+
+window.onAllocUserChange = function(i) {
+  const sel = document.getElementById('alloc-user-sel-' + i);
+  const txt = document.getElementById('alloc-user-' + i);
+  if (!sel || !txt) return;
+  txt.style.display = sel.value === '__other__' ? '' : 'none';
+  if (sel.value !== '__other__') txt.value = '';
+};
 
 window._allocRowCount = 0;
 window.addAllocRow = function() {
@@ -2572,25 +2681,30 @@ window.confirmAllocate = async function(keepRemainder) {
   if (!e || !entryId) return;
   const notes = document.getElementById('alloc-notes')?.value.trim() || '';
 
-  // Collect rows
+  // Collect rows — read from dropdown or text fallback
   const rows = document.querySelectorAll('[id^="allocrow_"]');
   const distributions = [];
   rows.forEach(row => {
     const i = row.id.replace('allocrow_', '');
-    const user = document.getElementById('alloc-user-' + i)?.value.trim();
-    const qty = parseInt(document.getElementById('alloc-qty-' + i)?.value);
-    if (user && qty > 0) distributions.push({ user, qty });
+    const sel = document.getElementById('alloc-user-sel-' + i);
+    const txt = document.getElementById('alloc-user-' + i);
+    const user = sel?.value === '__other__' ? txt?.value.trim() : sel?.value;
+    const qty = parseFloat(document.getElementById('alloc-qty-' + i)?.value);
+    if (user && qty > 0) distributions.push({ user, qty, isMember: sel?.value !== '__other__' && !!sel?.value });
   });
 
   if (!distributions.length) { alert('Add at least one recipient.'); return; }
 
-  // Write distribution log entries
+  // Write distribution log entries and add to member inventories
   for (const d of distributions) {
     await push(ref(db, 'dist_log'), {
       member: d.user,
+      isMember: d.isMember,
       materialName: e.materialName,
       qty: d.qty,
       quality: e.quality || 0,
+      itemType: e.itemType || 'material',
+      splittable: e.splittable || false,
       sourceEvent: e.sourceEvent || 'Manual Entry',
       sourceEventId: e.sourceEventId || null,
       bankEntryId: entryId,
@@ -2598,15 +2712,30 @@ window.confirmAllocate = async function(keepRemainder) {
       distributedBy: window._session.username,
       distributedAt: Date.now()
     });
+
+    // Add to member's personal inventory if they're a registered member
+    if (d.isMember) {
+      const memberEntry = Object.entries(window._membersData || {}).find(([,m]) => m.username === d.user);
+      if (memberEntry) {
+        const [memberId] = memberEntry;
+        await push(ref(db, 'personal_inventory/' + memberId), {
+          materialName: e.materialName,
+          qty: d.qty,
+          quality: e.quality || 0,
+          itemType: e.itemType || 'material',
+          splittable: e.splittable || false,
+          notes: 'Allocated from ' + (e.sourceEvent || 'org bank') + ' by ' + window._session.username + (notes ? ' · ' + notes : ''),
+          loggedAt: Date.now()
+        });
+      }
+    }
   }
 
   if (keepRemainder) {
-    // Update allocations on the entry, leave as undistributed
     const newAllocs = {};
     distributions.forEach(d => newAllocs[d.user] = d.qty);
     await update(ref(db, 'org_bank/' + entryId), { allocations: newAllocs });
   } else {
-    // Flip to distributed
     await update(ref(db, 'org_bank/' + entryId), { status: 'distributed' });
   }
 
