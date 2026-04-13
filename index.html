@@ -490,12 +490,13 @@ label { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: 
       <button class="nav-tab active locked" onclick="showPage('dashboard')" id="tab-dashboard">Dashboard</button>
       <button class="nav-tab locked" onclick="showPage('events')" id="tab-events">Events</button>
       <button class="nav-tab" onclick="showPage('myinv')" id="tab-myinv">My Inventory</button>
-      <button class="nav-tab" onclick="showPage('help')" id="tab-help">? Help</button>
       <button class="nav-tab locked" id="tab-orgbank" onclick="showPage('orgbank')">Org Bank</button>
       <button class="nav-tab locked" id="tab-reqs" onclick="showPage('reqs')">Requisitions</button>
       <button class="nav-tab locked" id="tab-crafting" onclick="showPage('crafting')">Crafting</button>
       <button class="nav-tab locked" id="tab-orgcrafting" onclick="showPage('orgcrafting')">Org Crafting</button>
       <button class="nav-tab locked" id="tab-admin" onclick="showPage('admin')">Admin</button>
+      <div style="flex:1"></div>
+      <button class="nav-tab" onclick="showPage('help')" id="tab-help" style="border-left:1px solid var(--border)">? Help</button>
     </div>
     <div class="topbar-user">
       <span id="topbarUsername" style="font-size:11px;color:var(--text2)"></span>
@@ -976,7 +977,7 @@ label { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: 
 </div>
 
 <!-- HELP PAGE -->
-<div class="page" id="page-help">
+<div class="page" id="page-help" style="padding-top:0">
   <div style="max-width:860px;margin:0 auto" id="helpContent">
     <div class="empty">Loading guide...</div>
   </div>
@@ -1115,8 +1116,8 @@ function fmtDur(mins) {
 function can(action) {
   const r = window._session?.role;
   switch (action) {
-    case 'run_event':      return ['event_organizer','cld_leadership','director_of_commerce'].includes(r);
-    case 'view_events':    return ['event_organizer','cld_leadership','director_of_commerce'].includes(r);
+    case 'run_event':      return ['event_organizer','nco','cld_leadership','director_of_commerce'].includes(r);
+    case 'view_events':    return ['event_organizer','nco','cld_leadership','director_of_commerce'].includes(r);
     case 'view_orgbank':   return ['cld_leadership','director_of_commerce'].includes(r);
     case 'edit_orgbank':   return ['cld_leadership','director_of_commerce'].includes(r);
     case 'admin':          return ['cld_leadership','director_of_commerce'].includes(r);
@@ -4094,7 +4095,7 @@ window.renderHelp = function() {
     <div class="section-title" style="font-size:9px;margin-bottom:12px"><div class="dot" style="background:var(--purple)"></div> Access Levels</div>
     <table class="tbl"><thead><tr><th>Role</th><th>Areas</th><th>Can Do</th></tr></thead><tbody>
       <tr><td><span class="tag" style="background:var(--accent-dim);border:1px solid rgba(0,200,240,0.2);color:var(--accent);font-size:9px">Member</span></td><td>My Inventory, Crafting</td><td>Log hauls, trade items, plan crafts, view mining locations</td></tr>
-      <tr><td><span class="tag" style="background:var(--accent-dim);border:1px solid rgba(0,200,240,0.2);color:var(--accent);font-size:9px">NCO</span></td><td>My Inventory, Crafting</td><td>Same as Member</td></tr>
+      <tr><td><span class="tag" style="background:var(--accent-dim);border:1px solid rgba(0,200,240,0.2);color:var(--accent);font-size:9px">NCO</span></td><td>My Inventory, Crafting, Events</td><td>Same as Member + create &amp; run events, log attendance &amp; materials</td></tr>
       <tr><td><span class="tag" style="background:rgba(255,112,32,0.1);border:1px solid rgba(255,112,32,0.2);color:var(--orange);font-size:9px">Event Organizer</span></td><td>+ Events</td><td>Create &amp; run events, log attendance &amp; materials</td></tr>
       <tr><td><span class="tag" style="background:rgba(0,232,152,0.1);border:1px solid rgba(0,232,152,0.2);color:var(--green);font-size:9px">C.O.</span></td><td>My Inventory, Crafting, Requisitions</td><td>Log hauls, trade items, plan crafts, submit &amp; view own requisitions</td></tr>
       <tr><td><span class="tag" style="background:rgba(255,192,64,0.1);border:1px solid rgba(255,192,64,0.2);color:var(--gold);font-size:9px">Dir. of Commerce</span></td><td>+ Requisitions, Org Crafting, Treasury</td><td>Approve reqs &amp; POs, distribute from org bank, manage treasury</td></tr>
@@ -4134,7 +4135,7 @@ window.renderHelp = function() {
   if (isEvOrg) {
     html += `<div class="card" style="margin-bottom:20px">
       <div class="section-title" style="font-size:9px;margin-bottom:4px"><div class="dot" style="background:var(--orange)"></div> Events</div>
-      ${sectionRole('Event Organizer, C.O., DoC, CLD Leadership')}
+      ${sectionRole('NCO, Event Organizer, DoC, CLD Leadership')}
       <p style="font-size:12px;color:var(--text2);margin-bottom:12px">5-phase workflow for running org events and distributing proceeds.</p>
       <table class="tbl"><thead><tr><th>Phase</th><th>What Happens</th></tr></thead><tbody>
         <tr><td><strong>1 · Setup</strong></td><td>Name the event, pick a type, add notes.</td></tr>
@@ -4150,7 +4151,7 @@ window.renderHelp = function() {
   if (isCO) {
     html += `<div class="card" style="margin-bottom:20px">
       <div class="section-title" style="font-size:9px;margin-bottom:4px"><div class="dot" style="background:var(--gold)"></div> Org Bank</div>
-      ${sectionRole('C.O., DoC, CLD Leadership')}
+      ${sectionRole('DoC, CLD Leadership')}
       <p style="font-size:12px;color:var(--text2);margin-bottom:12px">The org shared inventory. CLD Leadership and DoC can add and distribute.</p>
       <table class="tbl"><thead><tr><th>Tab</th><th>What It Shows</th></tr></thead><tbody>
         <tr><td><strong>Undistributed</strong></td><td>Everything waiting to be distributed, grouped by event. Click <strong>Allocate</strong> to distribute to members — select from dropdown, enter qty. Members automatically receive items in their personal inventory.</td></tr>
@@ -4166,7 +4167,7 @@ window.renderHelp = function() {
   if (can('submit_req')) {
     html += `<div class="card" style="margin-bottom:20px">
       <div class="section-title" style="font-size:9px;margin-bottom:4px"><div class="dot" style="background:var(--purple)"></div> Requisitions</div>
-      ${sectionRole('C.O., DoC, CLD Leadership')}
+      ${sectionRole('DoC, CLD Leadership')}
       <p style="font-size:12px;color:var(--text2);margin-bottom:12px">Request items from the org bank or external sourcing. DoC approves; CLD Leadership marks fulfilled.</p>
       <table class="tbl"><thead><tr><th>Step</th><th>How</th></tr></thead><tbody>
         <tr><td>Submit a req</td><td>Click <strong>+ New Requisition</strong>. Search items via UEX, add to list with quantities, set priority and notes.</td></tr>
