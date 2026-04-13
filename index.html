@@ -1809,13 +1809,14 @@ function buildReview() {
 
   // Render editable review
   el.innerHTML = att.sort((a,b) => b.durationMins - a.durationMins).map(m => {
+    const key = fbKey(m.username);
     const sharePct = ((m.shareWeight / totalWeight) * 100).toFixed(1);
     const matRows = mats.map(mat => `
       <div class="review-alloc-row">
         <label>${mat.name} <span style="color:var(--text3)">(Q:${mat.qual})</span></label>
         <input type="number" step="1" min="0"
-          value="${(allocs[m.username][mat.name] || 0)}"
-          onchange="updateAlloc('${m.username}', '${mat.name}', this.value)"
+          value="${(allocs[key][mat.name] || 0)}"
+          onchange="updateAlloc('${key}', '${mat.name}', this.value)"
           style="max-width:120px">
         <span style="font-size:10px;color:var(--text3)">${mat.splittable ? '' : 'whole units'}</span>
       </div>`).join('');
@@ -1830,9 +1831,9 @@ function buildReview() {
   }).join('');
 }
 
-window.updateAlloc = function(username, matName, val) {
-  if (!window._evAllocations[username]) window._evAllocations[username] = {};
-  window._evAllocations[fbKey(username)][matName] = parseFloat(val) || 0;
+window.updateAlloc = function(key, matName, val) {
+  if (!window._evAllocations[key]) window._evAllocations[key] = {};
+  window._evAllocations[key][matName] = parseFloat(val) || 0;
 };
 
 window.publishEvent = async function(orgHeld = false) {
