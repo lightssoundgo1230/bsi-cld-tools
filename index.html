@@ -674,7 +674,10 @@ label { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: 
   <div class="page" id="page-myinv">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
       <div class="section-title" style="margin-bottom:0;flex:1"><div class="dot" style="background:var(--green)"></div> My Inventory</div>
-      <button class="btn green" onclick="showAddPersonalModal()">+ Log Haul</button>
+      <div style="display:flex;gap:8px">
+        <button class="btn green" onclick="showAddPersonalModal()">+ Log Haul</button>
+        <button class="btn" style="border-color:var(--accent);color:var(--accent)" onclick="showPersonalTradeModal()">⇄ Trade</button>
+      </div>
     </div>
     <div class="notice info" style="margin-bottom:20px">Your personal inventory is private and only visible to you. Materials here are <strong>yours</strong> and are never automatically added to the Org Bank.</div>
     <div id="myInvContent"><div class="empty">No personal hauls logged.</div></div>
@@ -715,6 +718,7 @@ label { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: 
     <div id="ob-tab-dist" style="display:none">
       <div style="margin-bottom:16px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
         <input type="text" id="dist-filter" placeholder="Filter by member or material..." style="max-width:320px" oninput="renderDistLog()">
+        <button class="btn green" id="btn-distribute" style="display:none" onclick="showDistributeModal()">+ Distribute</button>
       </div>
       <div id="distLogContent"><div class="empty">No distributions recorded yet.</div></div>
     </div>
@@ -1372,6 +1376,10 @@ function setupUI() {
   if (!can('submit_req')) { const b = document.getElementById('btn-new-req'); if (b) b.style.display = 'none'; }
   document.getElementById('tab-crafting').classList.remove('locked');
   if (can('edit_orgbank')) document.getElementById('tab-orgcrafting').classList.remove('locked');
+  if (can('edit_orgbank')) {
+    const distBtn = document.getElementById('btn-distribute');
+    if (distBtn) distBtn.style.display = '';
+  }
   if (can('view_treasury')) {
     const tTab = document.getElementById('obtab-treasury');
     if (tTab) tTab.style.display = '';
@@ -2153,6 +2161,298 @@ window.renderOrgBank = function() {
       ${itemsHtml}
     </div>`;
   }).join('');
+};
+
+// ── Org Bank Distribution ──
+window.showDistributeModal = function() {
+  if (!can('edit_orgbank')) return;
+
+  // Get all undistributed org bank entries
+  const undist = Object.entries(window._orgBankData || {})
+    .filter(([,e]) => e.status === 'undistributed')
+    .sort((a,b) => (a[1].materialName||'').localeCompare(b[1].materialName||''));
+
+  if (!undist.length) {
+    alert('No undistributed items in the org bank.');
+    return;
+  }
+
+  // Build member dropdown options
+  const members = Object.values(window._membersData || {})
+    .filter(m => m.active !== false)
+    .sort((a,b) => a.username.localeCompare(b.username));
+
+  document.getElementById('modalTitle').textContent = 'DISTRIBUTE FROM ORG BANK';
+  document.getElementById('modalBody').innerHTML = `
+    <div class="field">
+      <label>Item / Material</label>
+      <select id="dist-item-select" onchange="onDistItemChange()" style="width:100%">
+        <option value="">— Select item —</option>
+        ${undist.map(([id,e]) => `<option value="${id}">${e.materialName}${e.itemType !== 'item' ? ' · Q:' + (e.quality||0) : ''} · ${e.totalQty} SCU · ${e.sourceEvent || 'Manual'}</option>`).join('')}
+      </select>
+    </div>
+    <div id="dist-item-info" style="display:none;background:var(--panel2);border:1px solid var(--border);padding:10px 14px;margin-bottom:14px">
+      <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:11px">
+        <span>Available: <strong id="dist-avail">—</strong></span>
+        <span id="dist-qual-info" style="display:none">Quality: <strong id="dist-qual">—</strong></span>
+        <span id="dist-type-info">Type: <strong id="dist-type">—</strong></span>
+      </div>
+    </div>
+    <div class="field">
+      <label>Quantity to Distribute</label>
+      <input type="number" id="dist-qty" min="0.01" step="0.01" placeholder="0">
+    </div>
+    <div class="field">
+      <label>Recipient</label>
+      <select id="dist-recipient-select" onchange="onDistRecipientChange()" style="width:100%">
+        <option value="">— Select member —</option>
+        ${members.map(m => `<option value="${m.username}">${m.username} · ${ROLE_LABELS[m.role]||m.role}</option>`).join('')}
+        <option value="__other__">Other (non-member)</option>
+      </select>
+    </div>
+    <div id="dist-other-wrap" style="display:none">
+      <div class="field">
+        <label>Recipient Name</label>
+        <input type="text" id="dist-other-name" placeholder="Enter name or callsign">
+      </div>
+    </div>
+    <div class="field">
+      <label>Notes (optional)</label>
+      <input type="text" id="dist-notes" placeholder="e.g. Payment for event attendance">
+    </div>
+    <div class="btn-row">
+      <button class="btn green" onclick="submitDistribution()">Distribute</button>
+      <button class="btn sm" onclick="closeModalDirect()">Cancel</button>
+    </div>`;
+  document.getElementById('modalOverlay').style.display = 'flex';
+};
+
+window.onDistItemChange = function() {
+  const id = document.getElementById('dist-item-select')?.value;
+  const infoEl = document.getElementById('dist-item-info');
+  if (!id) { if (infoEl) infoEl.style.display = 'none'; return; }
+  const entry = window._orgBankData[id];
+  if (!entry) return;
+  if (infoEl) infoEl.style.display = '';
+  document.getElementById('dist-avail').textContent = entry.totalQty + ' SCU';
+  const qualInfo = document.getElementById('dist-qual-info');
+  const qualEl = document.getElementById('dist-qual');
+  const typeEl = document.getElementById('dist-type');
+  if (entry.itemType === 'item') {
+    if (qualInfo) qualInfo.style.display = 'none';
+    if (typeEl) typeEl.textContent = 'Item';
+  } else {
+    if (qualInfo) qualInfo.style.display = '';
+    if (qualEl) qualEl.textContent = entry.quality + ' · ' + (entry.quality >= 750 ? 'Prime' : entry.quality >= 500 ? 'High' : entry.quality >= 250 ? 'Standard' : 'Any');
+    if (typeEl) typeEl.textContent = 'Material';
+  }
+  document.getElementById('dist-qty').max = entry.totalQty;
+};
+
+window.onDistRecipientChange = function() {
+  const val = document.getElementById('dist-recipient-select')?.value;
+  const wrap = document.getElementById('dist-other-wrap');
+  if (wrap) wrap.style.display = val === '__other__' ? '' : 'none';
+};
+
+window.submitDistribution = async function() {
+  const itemId = document.getElementById('dist-item-select')?.value;
+  const qty = parseFloat(document.getElementById('dist-qty')?.value);
+  const recipientSel = document.getElementById('dist-recipient-select')?.value;
+  const recipientOther = document.getElementById('dist-other-name')?.value.trim();
+  const notes = document.getElementById('dist-notes')?.value.trim() || '';
+
+  const recipient = recipientSel === '__other__' ? recipientOther : recipientSel;
+  if (!itemId) { alert('Select an item to distribute.'); return; }
+  if (isNaN(qty) || qty <= 0) { alert('Enter a valid quantity.'); return; }
+  if (!recipient) { alert('Select or enter a recipient.'); return; }
+
+  const entry = window._orgBankData[itemId];
+  if (!entry) { alert('Item not found.'); return; }
+  if (qty > entry.totalQty) { alert('Cannot distribute more than available (' + entry.totalQty + ' SCU).'); return; }
+
+  const isMember = recipientSel !== '__other__' && recipientSel !== '';
+
+  // Subtract from org bank
+  const newQty = Math.round((entry.totalQty - qty) * 1000) / 1000;
+  if (newQty <= 0) {
+    await update(ref(db, 'org_bank/' + itemId), { status: 'distributed', totalQty: 0 });
+  } else {
+    await update(ref(db, 'org_bank/' + itemId), { totalQty: newQty });
+  }
+
+  // Log the distribution
+  await push(ref(db, 'dist_log'), {
+    materialName: entry.materialName,
+    qty, quality: entry.quality || 0,
+    itemType: entry.itemType || 'material',
+    splittable: entry.splittable || false,
+    member: recipient,
+    isMember,
+    sourceEvent: entry.sourceEvent || 'Manual',
+    sourceEventId: entry.sourceEventId || null,
+    distributedBy: window._session.username,
+    distributedAt: Date.now(),
+    notes
+  });
+
+  // If recipient is a registered member, add to their personal inventory
+  if (isMember) {
+    const memberEntry = Object.entries(window._membersData || {}).find(([,m]) => m.username === recipient);
+    if (memberEntry) {
+      const [memberId] = memberEntry;
+      await push(ref(db, 'personal_inventory/' + memberId), {
+        materialName: entry.materialName,
+        qty, quality: entry.quality || 0,
+        itemType: entry.itemType || 'material',
+        splittable: entry.splittable || false,
+        notes: 'Distributed by ' + window._session.username + (notes ? ' · ' + notes : ''),
+        loggedAt: Date.now()
+      });
+    }
+  }
+
+  closeModalDirect();
+  renderDistLog();
+  renderOrgBank();
+};
+
+// ── Personal Trade (My Inventory → another member) ──
+window.showPersonalTradeModal = function() {
+  const myInv = Object.entries(window._personalInvCache || {});
+  if (!myInv.length) {
+    alert('Your inventory is empty.');
+    return;
+  }
+
+  const members = Object.values(window._membersData || {})
+    .filter(m => m.active !== false && m.username !== window._session?.username)
+    .sort((a,b) => a.username.localeCompare(b.username));
+
+  document.getElementById('modalTitle').textContent = 'TRADE FROM MY INVENTORY';
+  document.getElementById('modalBody').innerHTML = `
+    <div class="field">
+      <label>Item / Material</label>
+      <select id="trade-item-select" onchange="onTradeItemChange()" style="width:100%">
+        <option value="">— Select item —</option>
+        ${myInv.map(([id,e]) => `<option value="${id}">${e.materialName}${e.itemType !== 'item' ? ' · Q:' + (e.quality||0) : ''} · ${e.qty} SCU</option>`).join('')}
+      </select>
+    </div>
+    <div id="trade-item-info" style="display:none;background:var(--panel2);border:1px solid var(--border);padding:10px 14px;margin-bottom:14px">
+      <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:11px">
+        <span>Available: <strong id="trade-avail">—</strong></span>
+        <span id="trade-qual-info" style="display:none">Quality: <strong id="trade-qual">—</strong></span>
+      </div>
+    </div>
+    <div class="field">
+      <label>Quantity</label>
+      <input type="number" id="trade-qty" min="0.01" step="0.01" placeholder="0">
+    </div>
+    <div class="field">
+      <label>Recipient</label>
+      <select id="trade-recipient-select" onchange="onTradeRecipientChange()" style="width:100%">
+        <option value="">— Select member —</option>
+        ${members.map(m => `<option value="${m.username}">${m.username} · ${ROLE_LABELS[m.role]||m.role}</option>`).join('')}
+        <option value="__other__">Other (non-member / external)</option>
+      </select>
+    </div>
+    <div id="trade-other-wrap" style="display:none">
+      <div class="field">
+        <label>Recipient Name</label>
+        <input type="text" id="trade-other-name" placeholder="Enter name or callsign">
+      </div>
+    </div>
+    <div class="field">
+      <label>Notes (optional)</label>
+      <input type="text" id="trade-notes" placeholder="e.g. Payment for help on contract">
+    </div>
+    <div class="btn-row">
+      <button class="btn" style="border-color:var(--accent);color:var(--accent)" onclick="submitPersonalTrade()">Trade</button>
+      <button class="btn sm" onclick="closeModalDirect()">Cancel</button>
+    </div>`;
+  document.getElementById('modalOverlay').style.display = 'flex';
+};
+
+window.onTradeItemChange = function() {
+  const id = document.getElementById('trade-item-select')?.value;
+  const infoEl = document.getElementById('trade-item-info');
+  if (!id) { if (infoEl) infoEl.style.display = 'none'; return; }
+  const entry = window._personalInvCache[id];
+  if (!entry || !infoEl) return;
+  infoEl.style.display = '';
+  document.getElementById('trade-avail').textContent = entry.qty + ' SCU';
+  const qualInfo = document.getElementById('trade-qual-info');
+  const qualEl = document.getElementById('trade-qual');
+  if (entry.itemType === 'item') {
+    if (qualInfo) qualInfo.style.display = 'none';
+  } else {
+    if (qualInfo) qualInfo.style.display = '';
+    if (qualEl) qualEl.textContent = entry.quality + ' · ' + (entry.quality >= 750 ? 'Prime' : entry.quality >= 500 ? 'High' : entry.quality >= 250 ? 'Standard' : 'Any');
+  }
+  document.getElementById('trade-qty').max = entry.qty;
+};
+
+window.onTradeRecipientChange = function() {
+  const val = document.getElementById('trade-recipient-select')?.value;
+  const wrap = document.getElementById('trade-other-wrap');
+  if (wrap) wrap.style.display = val === '__other__' ? '' : 'none';
+};
+
+window.submitPersonalTrade = async function() {
+  const itemId = document.getElementById('trade-item-select')?.value;
+  const qty = parseFloat(document.getElementById('trade-qty')?.value);
+  const recipientSel = document.getElementById('trade-recipient-select')?.value;
+  const recipientOther = document.getElementById('trade-other-name')?.value.trim();
+  const notes = document.getElementById('trade-notes')?.value.trim() || '';
+
+  const recipient = recipientSel === '__other__' ? recipientOther : recipientSel;
+  if (!itemId) { alert('Select an item to trade.'); return; }
+  if (isNaN(qty) || qty <= 0) { alert('Enter a valid quantity.'); return; }
+  if (!recipient) { alert('Select or enter a recipient.'); return; }
+
+  const entry = window._personalInvCache[itemId];
+  if (!entry) { alert('Item not found.'); return; }
+  if (qty > entry.qty) { alert('Cannot trade more than you have (' + entry.qty + ' SCU).'); return; }
+
+  const myId = window._session.memberId;
+  const isMember = recipientSel !== '__other__' && recipientSel !== '';
+
+  // Subtract from my inventory
+  const newQty = Math.round((entry.qty - qty) * 1000) / 1000;
+  if (newQty <= 0) {
+    await remove(ref(db, 'personal_inventory/' + myId + '/' + itemId));
+  } else {
+    await update(ref(db, 'personal_inventory/' + myId + '/' + itemId), { qty: newQty });
+  }
+
+  // Log the trade
+  await push(ref(db, 'personal_dist_log/' + myId), {
+    materialName: entry.materialName,
+    qty, quality: entry.quality || 0,
+    itemType: entry.itemType || 'material',
+    recipient,
+    isMember,
+    tradedAt: Date.now(),
+    notes
+  });
+
+  // If recipient is a registered member, add to their inventory
+  if (isMember) {
+    const memberEntry = Object.entries(window._membersData || {}).find(([,m]) => m.username === recipient);
+    if (memberEntry) {
+      const [memberId] = memberEntry;
+      await push(ref(db, 'personal_inventory/' + memberId), {
+        materialName: entry.materialName,
+        qty, quality: entry.quality || 0,
+        itemType: entry.itemType || 'material',
+        splittable: entry.splittable || false,
+        notes: 'Traded by ' + window._session.username + (notes ? ' · ' + notes : ''),
+        loggedAt: Date.now()
+      });
+    }
+  }
+
+  closeModalDirect();
 };
 
 window.renderDistLog = function() {
@@ -3201,6 +3501,9 @@ window._accessRequestsData = {};
 async function loadPersonalInvCache() {
   if (!window._session?.memberId) return;
   // Live listener — cache updates automatically whenever inventory changes
+  onValue(ref(db, 'personal_dist_log/' + window._session.memberId), snap => {
+    window._personalDistLog = snap.val() || {};
+  });
   onValue(ref(db, 'personal_inventory/' + window._session.memberId), snap => {
     window._personalInvCache = snap.exists() ? snap.val() : {};
     // Re-render shopping list if planner is open
@@ -3673,6 +3976,7 @@ window.submitBalanceUpdate = async function() {
 window.showNewPOModal = function() {
   if (!can('submit_po')) return;
   window._poSelectedItems = [];
+window._personalDistLog = {};
   const username = window._session.username;
   const myBalance = Object.values(window._treasuryData).find(b => b.username === username)?.balance || 0;
 
@@ -3721,6 +4025,7 @@ window.showNewPOModal = function() {
 };
 
 window._poSelectedItems = [];
+window._personalDistLog = {};
 window._poSearchResults = [];
 
 window.poItemSearch = function() {
@@ -3795,6 +4100,7 @@ window.submitPO = async function() {
     submittedAt: Date.now()
   });
   window._poSelectedItems = [];
+window._personalDistLog = {};
   closeModalDirect();
 };
 
