@@ -3609,14 +3609,11 @@ function renderNeededList(needed, miningData) {
               location: locKey,
               system: loc.system || 'Stanton',
               locationType: loc.locationType || loc.type || '',
-              score: 0,
-              maxPct: 0
+              spawnChance: 0
             };
           }
-          // Score = relativeProbability × maxPercent — higher is better
-          const score = relProb * (part.maxPercent || 0);
-          elementLocations[elemName][locKey].score += score;
-          elementLocations[elemName][locKey].maxPct = Math.max(elementLocations[elemName][locKey].maxPct, part.maxPercent || 0);
+          // Accumulate relative probability as spawn chance
+          elementLocations[elemName][locKey].spawnChance += relProb;
         }
       }
     }
@@ -3639,20 +3636,35 @@ function renderNeededList(needed, miningData) {
 
     const normName = normalizeMaterialName(mat);
     const locMap = elementLocations[normName] || {};
-    const locs = Object.values(locMap).sort((a,b) => b.score - a.score).slice(0, 3);
+    const allLocs = Object.values(locMap).sort((a,b) => b.spawnChance - a.spawnChance);
     const grade = info.minQuality >= 750 ? 'Prime' : info.minQuality >= 500 ? 'High' : info.minQuality >= 250 ? 'Standard' : 'Any';
     const needed_qty = Math.ceil(info.qty * 100) / 100;
 
-    const locHtml = locs.length ? locs.map((l, i) => `
-      <div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid rgba(26,45,63,0.4)">
-        <span style="font-size:10px;color:var(--text3);min-width:16px">#${i+1}</span>
-        <div style="flex:1">
-          <span style="font-size:12px">${l.location}</span>
-          ${l.system && l.system !== 'Stanton' ? `<span style="font-size:10px;color:var(--text2);margin-left:8px">${l.system}</span>` : ''}
-          ${l.locationType ? `<span style="font-size:10px;color:var(--text3);margin-left:6px">${l.locationType}</span>` : ''}
-        </div>
-        <span class="tag" style="background:var(--green-dim);border:1px solid rgba(0,232,152,0.2);color:var(--green);font-size:9px">up to ${l.maxPct.toFixed(1)}%</span>
-      </div>`).join('') :
+    const systemColors = { Stanton: 'var(--accent)', Pyro: 'var(--orange)', Nyx: 'var(--purple)' };
+
+    // Group by system, top 3 per system
+    const bySystem = {};
+    for (const l of allLocs) {
+      const sys = l.system || 'Stanton';
+      if (!bySystem[sys]) bySystem[sys] = [];
+      if (bySystem[sys].length < 3) bySystem[sys].push(l);
+    }
+
+    const locHtml = Object.keys(bySystem).length ? Object.entries(bySystem).map(([sys, sysLocs]) => {
+      const sc = systemColors[sys] || 'var(--text2)';
+      return `<div style="margin-bottom:10px">
+        <div style="font-size:9px;letter-spacing:2px;text-transform:uppercase;color:${sc};margin-bottom:4px">${sys}</div>
+        ${sysLocs.map((l, i) => `
+          <div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid rgba(26,45,63,0.3)">
+            <span style="font-size:10px;color:var(--text3);min-width:16px">#${i+1}</span>
+            <div style="flex:1">
+              <span style="font-size:12px">${l.location}</span>
+              ${l.locationType ? `<span style="font-size:10px;color:var(--text3);margin-left:6px">${l.locationType}</span>` : ''}
+            </div>
+            <span class="tag" style="background:${sc}22;border:1px solid ${sc}44;color:${sc};font-size:9px">spawn: ${l.spawnChance.toFixed(1)}</span>
+          </div>`).join('')}
+      </div>`;
+    }).join('') :
       `<div style="font-size:11px;color:var(--text3);padding:8px 0">${isFPS ? '🧱 FPS mining (ground/cave node)' : 'No location data found — check SCMDB directly'}</div>`;
 
     return `<div style="background:var(--panel2);border:1px solid var(--border);margin-bottom:12px">
@@ -3672,7 +3684,7 @@ function renderNeededList(needed, miningData) {
         </div>` : ''}
       </div>
       <div style="padding:8px 16px">
-        <div style="font-size:9px;letter-spacing:2px;color:var(--text2);text-transform:uppercase;margin-bottom:6px">Top Mining Locations</div>
+        <div style="font-size:9px;letter-spacing:2px;color:var(--text2);text-transform:uppercase;margin-bottom:8px">Top Mining Locations by System</div>
         ${locHtml}
       </div>
     </div>`;
