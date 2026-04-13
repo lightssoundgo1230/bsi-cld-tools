@@ -3002,7 +3002,7 @@ window.renderReqs = function() {
     });
 
     const canApprove = isApprover && r.status === 'pending';
-    const canFulfill = isApprover && r.status === 'approved';
+    const canFulfill = (isApprover || can('edit_orgbank')) && r.status === 'approved';
     const isOwn = r.submittedBy === myUsername;
 
     return `<div class="card" style="margin-bottom:14px">
