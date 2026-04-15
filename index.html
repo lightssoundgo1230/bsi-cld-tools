@@ -685,6 +685,7 @@ label { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: 
       <div class="section-title" style="margin-bottom:0;flex:1"><div class="dot" style="background:var(--green)"></div> My Inventory</div>
       <div style="display:flex;gap:8px">
         <button class="btn green" onclick="showAddPersonalModal()">+ Log Haul</button>
+        <button class="btn sm green" onclick="showBulkPersonalModal()">+ Bulk Log</button>
         <button class="btn" style="border-color:var(--accent);color:var(--accent)" onclick="showPersonalTradeModal()">⇄ Trade</button>
       </div>
     </div>
@@ -701,6 +702,7 @@ label { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: 
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px">
       <div class="section-title" style="margin-bottom:0;flex:1"><div class="dot" style="background:var(--gold)"></div> Org Bank</div>
       <button class="btn gold" id="btn-add-to-bank" style="display:none" onclick="showAddToBankModal()">+ Add to Bank</button>
+      <button class="btn sm gold" id="btn-bulk-add-to-bank" style="display:none" onclick="showBulkBankModal()">+ Bulk Add</button>
     </div>
     <div class="notice warn" id="orgbank-readonly-notice" style="display:none">You have view-only access to the Org Bank.</div>
     <div class="grid4" style="margin-bottom:20px">
@@ -1936,6 +1938,231 @@ window.publishEvent = async function(orgHeld = false) {
 };
 
 // ── My Inventory ──
+// ── Bulk Inventory Addition ──
+window._bulkPersonalItems = [];
+window._bulkBankItems = [];
+
+function bulkItemRowHtml(idx, context) {
+  const idPfx = context === 'bank' ? 'bk' : 'bp';
+  return `<div id="${idPfx}-row-${idx}" style="display:grid;grid-template-columns:2fr 1fr 1fr auto auto;gap:8px;align-items:center;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--border)">
+    <div>
+      <input type="text" id="${idPfx}-search-${idx}" placeholder="Search item..." oninput="bulkSearch(${idx},'${context}')" autocomplete="off" style="width:100%">
+      <div id="${idPfx}-results-${idx}" style="position:relative"></div>
+      <div id="${idPfx}-selected-${idx}" style="font-size:10px;color:var(--accent);margin-top:3px;display:none"></div>
+    </div>
+    <input type="number" id="${idPfx}-qty-${idx}" placeholder="Qty" min="0.01" step="0.01" style="width:100%">
+    <input type="number" id="${idPfx}-qual-${idx}" placeholder="Quality" min="1" max="999" style="width:100%;opacity:0.5" title="Leave blank for items">
+    <div style="display:flex;flex-direction:column;gap:4px;font-size:10px">
+      <label style="display:flex;align-items:center;gap:4px;cursor:pointer;text-transform:none;letter-spacing:0;margin:0">
+        <input type="checkbox" id="${idPfx}-gem-${idx}" style="width:auto"> Gem
+      </label>
+    </div>
+    <button onclick="bulkRemoveRow(${idx},'${context}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:16px;padding:0 4px">×</button>
+  </div>`;
+}
+
+window._bulkSearchResults = {};
+
+window.bulkSearch = function(idx, context) {
+  const idPfx = context === 'bank' ? 'bk' : 'bp';
+  const q = document.getElementById(`${idPfx}-search-${idx}`)?.value.trim();
+  const resultsEl = document.getElementById(`${idPfx}-results-${idx}`);
+  if (!q || q.length < 2 || !window._uexCacheReady) { if (resultsEl) resultsEl.innerHTML = ''; return; }
+  const results = searchUexCached(q).slice(0, 6);
+  window._bulkSearchResults[`${context}-${idx}`] = results;
+  if (!resultsEl) return;
+  resultsEl.innerHTML = results.length ? `<div style="background:var(--panel2);border:1px solid var(--border);position:absolute;width:100%;z-index:20">` +
+    results.map((item, i) => `<div style="padding:6px 10px;cursor:pointer;font-size:11px;border-bottom:1px solid var(--border)"
+      onmouseover="this.style.background='rgba(0,232,152,0.07)'" onmouseout="this.style.background=''"
+      onclick="bulkSelectItem(${idx},'${context}',${i})">
+        ${item.name} <span style="font-size:9px;color:var(--text3)">${item._type==='commodity'?'Material':'Item'}</span>
+      </div>`).join('') + '</div>' : '';
+};
+
+window.bulkSelectItem = function(idx, context, resultIdx) {
+  const idPfx = context === 'bank' ? 'bk' : 'bp';
+  const item = (window._bulkSearchResults[`${context}-${idx}`] || [])[resultIdx];
+  if (!item) return;
+
+  // Store on the row's data
+  const arr = context === 'bank' ? window._bulkBankItems : window._bulkPersonalItems;
+  arr[idx] = { ...arr[idx], item };
+
+  document.getElementById(`${idPfx}-search-${idx}`).value = '';
+  document.getElementById(`${idPfx}-results-${idx}`).innerHTML = '';
+  const selEl = document.getElementById(`${idPfx}-selected-${idx}`);
+  if (selEl) { selEl.style.display = ''; selEl.textContent = '✓ ' + item.name; }
+
+  // Auto-set quality field opacity based on type
+  const qualEl = document.getElementById(`${idPfx}-qual-${idx}`);
+  const gemEl = document.getElementById(`${idPfx}-gem-${idx}`);
+  if (qualEl) qualEl.style.opacity = item._type === 'item' ? '0.4' : '1';
+  if (gemEl && item._type !== 'item') {
+    const isGemItem = GEM_NAMES.some(g => item.name.toLowerCase().includes(g.toLowerCase()));
+    gemEl.checked = isGemItem;
+  }
+};
+
+window.bulkRemoveRow = function(idx, context) {
+  const idPfx = context === 'bank' ? 'bk' : 'bp';
+  const arr = context === 'bank' ? window._bulkBankItems : window._bulkPersonalItems;
+  arr[idx] = null;
+  const row = document.getElementById(`${idPfx}-row-${idx}`);
+  if (row) row.style.display = 'none';
+};
+
+window.bulkAddRow = function(context) {
+  const idPfx = context === 'bank' ? 'bk' : 'bp';
+  const arr = context === 'bank' ? window._bulkBankItems : window._bulkPersonalItems;
+  const idx = arr.length;
+  arr.push(null);
+  const container = document.getElementById(`${idPfx}-rows`);
+  if (!container) return;
+  const div = document.createElement('div');
+  div.innerHTML = bulkItemRowHtml(idx, context);
+  container.appendChild(div.firstChild);
+};
+
+// ── Bulk Personal ──
+window.showBulkPersonalModal = function() {
+  window._bulkPersonalItems = [null, null, null]; // start with 3 rows
+  document.getElementById('modalTitle').textContent = 'BULK LOG — MY INVENTORY';
+  document.getElementById('modalBody').innerHTML = `
+    <div class="notice info" style="margin-bottom:12px;font-size:11px">Search and add multiple items at once. Leave quality blank for items (armor, weapons etc.).</div>
+    <div style="display:grid;grid-template-columns:2fr 1fr 1fr auto auto;gap:8px;margin-bottom:6px">
+      <div style="font-size:9px;color:var(--text2);text-transform:uppercase;letter-spacing:1px">Item / Material</div>
+      <div style="font-size:9px;color:var(--text2);text-transform:uppercase;letter-spacing:1px">Qty</div>
+      <div style="font-size:9px;color:var(--text2);text-transform:uppercase;letter-spacing:1px">Quality</div>
+      <div style="font-size:9px;color:var(--text2);text-transform:uppercase;letter-spacing:1px">Gem</div>
+      <div></div>
+    </div>
+    <div id="bp-rows">
+      ${[0,1,2].map(i => bulkItemRowHtml(i, 'personal')).join('')}
+    </div>
+    <button class="btn sm" onclick="bulkAddRow('personal')" style="margin-bottom:16px">+ Add Row</button>
+    <div class="field">
+      <label>Notes (optional — applies to all)</label>
+      <input type="text" id="bp-notes" placeholder="e.g. CRU-L1 mining run">
+    </div>
+    <div class="btn-row">
+      <button class="btn green" onclick="submitBulkPersonal()">Log All</button>
+      <button class="btn sm" onclick="closeModalDirect()">Cancel</button>
+    </div>`;
+  document.getElementById('modalOverlay').style.display = 'flex';
+};
+
+window.submitBulkPersonal = async function() {
+  const notes = document.getElementById('bp-notes')?.value.trim() || '';
+  const memberId = window._session?.memberId;
+  if (!memberId) return;
+
+  let count = 0;
+  for (let idx = 0; idx < window._bulkPersonalItems.length; idx++) {
+    const entry = window._bulkPersonalItems[idx];
+    const idPfx = 'bp';
+    const row = document.getElementById(`${idPfx}-row-${idx}`);
+    if (!row || row.style.display === 'none') continue;
+
+    const item = entry?.item;
+    if (!item) continue;
+
+    const qty = parseFloat(document.getElementById(`${idPfx}-qty-${idx}`)?.value);
+    if (isNaN(qty) || qty <= 0) continue;
+
+    const isItemType = item._type !== 'commodity';
+    const qual = isItemType ? 0 : (parseInt(document.getElementById(`${idPfx}-qual-${idx}`)?.value) || 0);
+    const gem = document.getElementById(`${idPfx}-gem-${idx}`)?.checked || false;
+    const splittable = isItemType ? true : gem;
+
+    await push(ref(db, 'personal_inventory/' + memberId), {
+      materialName: item.name,
+      qty, quality: qual, splittable,
+      itemType: isItemType ? 'item' : 'material',
+      notes, loggedAt: Date.now()
+    });
+    count++;
+  }
+
+  closeModalDirect();
+  if (count > 0) alert(`${count} item${count !== 1 ? 's' : ''} logged to your inventory.`);
+};
+
+// ── Bulk Org Bank ──
+window.showBulkBankModal = function() {
+  window._bulkBankItems = [null, null, null];
+  document.getElementById('modalTitle').textContent = 'BULK ADD — ORG BANK';
+  document.getElementById('modalBody').innerHTML = `
+    <div class="notice info" style="margin-bottom:12px;font-size:11px">Add multiple items to the org bank at once. Leave quality blank for items.</div>
+    <div style="display:grid;grid-template-columns:2fr 1fr 1fr auto auto;gap:8px;margin-bottom:6px">
+      <div style="font-size:9px;color:var(--text2);text-transform:uppercase;letter-spacing:1px">Item / Material</div>
+      <div style="font-size:9px;color:var(--text2);text-transform:uppercase;letter-spacing:1px">Qty</div>
+      <div style="font-size:9px;color:var(--text2);text-transform:uppercase;letter-spacing:1px">Quality</div>
+      <div style="font-size:9px;color:var(--text2);text-transform:uppercase;letter-spacing:1px">Gem</div>
+      <div></div>
+    </div>
+    <div id="bk-rows">
+      ${[0,1,2].map(i => bulkItemRowHtml(i, 'bank')).join('')}
+    </div>
+    <button class="btn sm" onclick="bulkAddRow('bank')" style="margin-bottom:16px">+ Add Row</button>
+    <div class="field">
+      <label>Source / Origin (applies to all)</label>
+      <input type="text" id="bk-source" placeholder="e.g. CRU-L1 mining run, Admin add...">
+    </div>
+    <div class="field">
+      <label>Notes (optional)</label>
+      <input type="text" id="bk-notes" placeholder="">
+    </div>
+    <div class="btn-row">
+      <button class="btn gold" onclick="submitBulkBank()">Add All to Bank</button>
+      <button class="btn sm" onclick="closeModalDirect()">Cancel</button>
+    </div>`;
+  document.getElementById('modalOverlay').style.display = 'flex';
+};
+
+window.submitBulkBank = async function() {
+  const source = document.getElementById('bk-source')?.value.trim() || 'Manual Entry';
+  const notes = document.getElementById('bk-notes')?.value.trim() || '';
+
+  let count = 0;
+  for (let idx = 0; idx < window._bulkBankItems.length; idx++) {
+    const entry = window._bulkBankItems[idx];
+    const idPfx = 'bk';
+    const row = document.getElementById(`${idPfx}-row-${idx}`);
+    if (!row || row.style.display === 'none') continue;
+
+    const item = entry?.item;
+    if (!item) continue;
+
+    const qty = parseFloat(document.getElementById(`${idPfx}-qty-${idx}`)?.value);
+    if (isNaN(qty) || qty <= 0) continue;
+
+    const isItemType = item._type !== 'commodity';
+    const qual = isItemType ? 0 : (parseInt(document.getElementById(`${idPfx}-qual-${idx}`)?.value) || 0);
+    const gem = document.getElementById(`${idPfx}-gem-${idx}`)?.checked || false;
+    const splittable = isItemType ? true : gem;
+
+    await push(ref(db, 'org_bank'), {
+      materialName: item.name,
+      totalQty: qty,
+      quality: qual,
+      splittable,
+      itemType: isItemType ? 'item' : 'material',
+      allocations: {},
+      sourceEvent: source,
+      sourceEventId: null,
+      status: 'undistributed',
+      notes,
+      loggedBy: window._session.username,
+      loggedAt: Date.now()
+    });
+    count++;
+  }
+
+  closeModalDirect();
+  renderOrgBank();
+  if (count > 0) alert(`${count} item${count !== 1 ? 's' : ''} added to org bank.`);
+};
+
 window.showAddPersonalModal = function() {
   window._pmSelectedItem = null;
   document.getElementById('modalTitle').textContent = 'LOG PERSONAL HAUL';
@@ -2207,7 +2434,11 @@ window._poTab = 'pending';
 window.renderOrgBank = function() {
   if (!can('view_orgbank')) return;
   const isEdit = can('edit_orgbank');
-  if (isEdit) document.getElementById('btn-add-to-bank').style.display = '';
+  if (isEdit) {
+    document.getElementById('btn-add-to-bank').style.display = '';
+    const bulkBtn = document.getElementById('btn-bulk-add-to-bank');
+    if (bulkBtn) bulkBtn.style.display = '';
+  }
   if (!isEdit) document.getElementById('orgbank-readonly-notice').style.display = '';
 
   const all = Object.values(window._orgBankData);
@@ -4658,7 +4889,7 @@ function renderNeededList(needed, miningData) {
         ${elemEntry ? `<div style="display:flex;gap:16px;flex-wrap:wrap">
           <span style="font-size:11px;color:var(--text2)">Instability: <span style="color:${instColor}">${instability.toFixed(0)}</span></span>
           <span style="font-size:11px;color:var(--text2)">Resistance: <span style="color:${resColor}">${resistance >= 0 ? '+' : ''}${(resistance * 100).toFixed(0)}%</span></span>
-          ${scanSig ? `<span style="font-size:11px;color:var(--text2)">Scan Sig: <span style="color:var(--text)">${scanSig}</span></span>` : ''}
+          ${scanSig ? `<span style="font-size:11px;color:var(--text2)">Scan Sig: <span style="color:var(--text)">${[1,2,3,4,5,6].map(n => scanSig * n).join(' · ')}</span></span>` : ''}
         </div>` : ''}
       </div>
       <div style="padding:8px 16px">
