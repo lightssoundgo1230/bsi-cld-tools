@@ -4161,29 +4161,76 @@ window.showCompletePersonalJobModal = async function(jobPath, fullPath) {
   const job = (window._personalJobsData[memberId] || {})[jobId];
   if (!job) return;
 
-  await loadPersonalInvCache();
-
+  const inv = window._personalInvCache || {};
   const mats = Object.entries(job.materials || {});
-  const rows = mats.map(([mat, info]) => {
+
+  // Build per-material sections — each shows all matching inventory entries to pick from
+  const sections = mats.map(([mat, info]) => {
     const needed = Math.ceil((info.qty||0)*100)/100;
-    const inInv = getPersonalInvQty(mat);
-    return `<div class="review-alloc-row" style="margin-bottom:10px">
-      <label style="min-width:130px">${mat}</label>
-      <input type="number" id="deduct_${mat.replace(/\s/g,'_')}" value="${Math.min(needed, inInv)}"
-        min="0" max="${inInv}" step="0.01" style="max-width:100px">
-      <span style="font-size:10px;color:var(--text2)">/ ${inInv} in inventory</span>
+    const minQual = info.minQuality || 0;
+    const grade = minQual >= 750 ? 'Prime' : minQual >= 500 ? 'High' : minQual >= 250 ? 'Standard' : 'Any';
+
+    // Get all inventory entries for this material
+    const entries = Object.entries(inv)
+      .filter(([,i]) => i.materialName?.toLowerCase() === mat.toLowerCase())
+      .sort((a,b) => (b[1].quality||0) - (a[1].quality||0)); // highest quality first
+
+    if (!entries.length) {
+      return `<div style="margin-bottom:14px;padding:10px 12px;background:var(--bg);border:1px solid var(--border)">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+          <span style="font-size:12px;font-weight:600">${mat}</span>
+          <span style="font-size:10px;color:var(--text2)">Need: ${needed} SCU · Min: ${grade}</span>
+          <span class="tag" style="background:var(--red-dim);border:1px solid rgba(255,64,96,0.2);color:var(--red);font-size:9px">NOT IN INVENTORY</span>
+        </div>
+      </div>`;
+    }
+
+    const entryRows = entries.map(([id, item]) => {
+      const qualColor = (item.quality||0) >= 750 ? 'var(--green)' : (item.quality||0) >= 500 ? 'var(--orange)' : (item.quality||0) >= 250 ? 'var(--accent)' : 'var(--text2)';
+      const qualLabel = (item.quality||0) >= 750 ? 'Prime' : (item.quality||0) >= 500 ? 'High' : (item.quality||0) >= 250 ? 'Standard' : (item.quality||0) > 0 ? 'Any' : '—';
+      const meetsMin = !minQual || (item.quality||0) >= minQual;
+      return `<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid rgba(26,45,63,0.3)">
+        <span style="color:${qualColor};font-size:11px;min-width:60px">${item.quality||0} <span style="font-size:9px">${qualLabel}</span></span>
+        <span style="font-size:11px;color:var(--text2);flex:1">Available: ${item.qty} SCU</span>
+        ${!meetsMin ? `<span class="tag" style="background:var(--orange-dim);border:1px solid rgba(255,112,32,0.2);color:var(--orange);font-size:9px">Below min</span>` : ''}
+        <input type="number" id="deduct_${id}" data-mat="${mat}" data-max="${item.qty}"
+          placeholder="0" min="0" max="${item.qty}" step="0.01"
+          style="width:80px;font-size:11px" oninput="updateDeductTotal('${mat.replace(/'/g,'\'')}')" value="0">
+        <span style="font-size:10px;color:var(--text3)">SCU</span>
+      </div>`;
+    }).join('');
+
+    return `<div style="margin-bottom:16px;padding:10px 12px;background:var(--bg);border:1px solid var(--border)">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap">
+        <span style="font-size:12px;font-weight:600">${mat}</span>
+        <span style="font-size:10px;color:var(--text2)">Need: <strong style="color:var(--text)">${needed} SCU</strong></span>
+        <span style="font-size:10px;color:var(--text2)">Min quality: <strong style="color:var(--accent)">${grade}</strong></span>
+        <span style="font-size:11px;margin-left:auto">Deducting: <strong id="deduct-total-${mat.replace(/\s/g,'_')}" style="color:var(--green)">0</strong> / ${needed} SCU</span>
+      </div>
+      ${entryRows}
     </div>`;
   }).join('');
 
-  document.getElementById('modalTitle').textContent = 'COMPLETE JOB — DEDUCT MATERIALS';
+  document.getElementById('modalTitle').textContent = 'COMPLETE JOB — SELECT MATERIALS';
   document.getElementById('modalBody').innerHTML = `
-    <div class="notice info" style="margin-bottom:16px">Adjust quantities to deduct from your personal inventory. Set to 0 to skip a material.</div>
-    ${rows}
+    <div class="notice info" style="margin-bottom:16px;font-size:11px">Choose which inventory entries to deduct for each material. Highest quality shown first.</div>
+    ${sections}
     <div class="btn-row" style="margin-top:16px">
       <button class="btn green" onclick="confirmCompletePersonalJob('${jobPath}','${fullPath}')">Confirm & Complete</button>
       <button class="btn sm" onclick="closeModalDirect()">Cancel</button>
     </div>`;
   document.getElementById('modalOverlay').style.display = 'flex';
+};
+
+window.updateDeductTotal = function(mat) {
+  const allInputs = document.querySelectorAll(`[data-mat="${mat}"]`);
+  let total = 0;
+  allInputs.forEach(inp => total += parseFloat(inp.value) || 0);
+  const totalEl = document.getElementById('deduct-total-' + mat.replace(/\s/g,'_'));
+  if (totalEl) {
+    totalEl.textContent = Math.round(total * 1000) / 1000;
+    totalEl.style.color = total > 0 ? 'var(--green)' : 'var(--text3)';
+  }
 };
 
 window.confirmCompletePersonalJob = async function(jobPath, fullPath) {
@@ -4199,23 +4246,19 @@ window.confirmCompletePersonalJob = async function(jobPath, fullPath) {
   const invSnap = await get(ref(db, 'personal_inventory/' + window._session.memberId));
   const inv = invSnap.exists() ? invSnap.val() : {};
 
-  for (const [mat] of mats) {
-    const inputEl = document.getElementById('deduct_' + mat.replace(/\s/g,'_'));
-    let toDeduct = parseFloat(inputEl?.value) || 0;
-    if (toDeduct <= 0) continue;
-
-    // Find inventory entries for this material and deduct
-    for (const [itemId, item] of Object.entries(inv)) {
-      if (item.materialName?.toLowerCase() !== mat.toLowerCase()) continue;
-      if (toDeduct <= 0) break;
-      const deductHere = Math.min(toDeduct, item.qty);
-      const newQty = Math.round((item.qty - deductHere) * 1000) / 1000;
-      if (newQty <= 0) {
-        await remove(ref(db, 'personal_inventory/' + window._session.memberId + '/' + itemId));
-      } else {
-        await update(ref(db, 'personal_inventory/' + window._session.memberId + '/' + itemId), { qty: newQty });
-      }
-      toDeduct -= deductHere;
+  // Deduct from specific inventory entries chosen by the member
+  const allDeductInputs = document.querySelectorAll('[id^="deduct_"][data-mat]');
+  for (const inp of allDeductInputs) {
+    const qty = parseFloat(inp.value) || 0;
+    if (qty <= 0) continue;
+    const itemId = inp.id.replace('deduct_', '');
+    const item = inv[itemId];
+    if (!item) continue;
+    const newQty = Math.round((item.qty - Math.min(qty, item.qty)) * 1000) / 1000;
+    if (newQty <= 0) {
+      await remove(ref(db, 'personal_inventory/' + window._session.memberId + '/' + itemId));
+    } else {
+      await update(ref(db, 'personal_inventory/' + window._session.memberId + '/' + itemId), { qty: newQty });
     }
   }
 
