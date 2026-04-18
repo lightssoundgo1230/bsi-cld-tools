@@ -1805,18 +1805,6 @@ function buildReview() {
   const allocs = {};
   att.forEach(m => allocs[fbKey(m.username)] = {});
 
-  // Calculate initial allocations — largest remainder method for ALL materials
-  // Splittable = stack can be divided (gems), but still whole units only
-  for (const mat of mats) {
-    const exact = att.map(m => (m.shareWeight / totalWeight) * mat.qty);
-    const floors = exact.map(Math.floor);
-    const rems = exact.map((v, i) => ({ i, r: v - floors[i] })).sort((a,b) => b.r - a.r);
-    const extra = Math.round(mat.qty) - floors.reduce((a,b) => a+b, 0);
-    const bonusSet = new Set(rems.slice(0, Math.max(0, extra)).map(r => r.i));
-    att.forEach((m, i) => {
-      allocs[fbKey(m.username)][mat.name] = floors[i] + (bonusSet.has(i) ? 1 : 0);
-    });
-  }
 
   window._evAllocations = allocs;
 
