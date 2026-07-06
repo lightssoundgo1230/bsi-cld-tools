@@ -1026,7 +1026,7 @@ label { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: 
       <div class="section-title" style="margin-bottom:0;flex:1"><div class="dot" style="background:var(--purple)"></div> Contract Board</div>
       <button class="btn purple-btn" id="btn-new-contract" style="display:none" onclick="showNewContractModal()">+ Post Contract</button>
     </div>
-    <div class="notice info" style="font-size:11px">Org job board: leadership posts hauling, escort, mining, and supply jobs with an aUEC reward. Claim one, get it done, and the reward is credited to your treasury balance on completion.</div>
+    <div class="notice info" style="font-size:11px">Org job board: leadership posts hauling, escort, mining, and supply jobs. Claim one, get it done, and it gets marked complete on the board.</div>
     <div style="display:flex;gap:2px;margin-bottom:20px;border-bottom:1px solid var(--border)">
       <button class="nav-tab active" id="ctab-open" onclick="switchContractTab('open')" style="border-bottom:none">Open</button>
       <button class="nav-tab" id="ctab-claimed" onclick="switchContractTab('claimed')" style="border-bottom:none">In Progress</button>
@@ -1656,7 +1656,7 @@ function loadAll() {
   onValue(ref(db, 'contracts'), snap => {
     const val = snap.val() || {};
     notifyNewEntries('contracts', val, (c) => c.status === 'open' && c.postedBy !== window._session?.username,
-      (c) => ({ title: 'NEW CONTRACT', body: `${c.title} — ${fmtAuec(c.reward || 0)} reward`, page: 'contracts' }));
+      (c) => ({ title: 'NEW CONTRACT', body: `${c.title} — ${(CONTRACT_TYPES[c.type] || c.type || 'job')}`, page: 'contracts' }));
     window._contractsData = val;
     if (document.getElementById('page-contracts')?.classList.contains('active')) renderContracts();
     updateContractsBadge();
@@ -3597,10 +3597,15 @@ window.renderReqs = function() {
         </table>
       </div>
       ${r.status === 'pending' || r.status === 'approved' ? `
-        <div style="margin-top:12px">
+        <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn sm" style="border-color:var(--purple);color:var(--purple)" onclick="showSourcingPanel('${id}')">
             🔍 Find Sourcing Locations
           </button>
+          ${can('edit_orgbank') && !r.craftingJobId ? `
+          <button class="btn sm" style="border-color:var(--orange);color:var(--orange)" onclick="showReqToCraftModal('${id}')">
+            ⚒ Create Crafting Job
+          </button>` : ''}
+          ${r.craftingJobId ? `<span class="tag" style="color:var(--orange);border-color:rgba(255,112,32,0.4)">⚒ CRAFTING JOB CREATED</span>` : ''}
         </div>
         <div id="sourcing_${id}" style="display:none;margin-top:12px"></div>` : ''}
     </div>`;
@@ -4267,7 +4272,7 @@ window.renderCraftingJobs = function(context) {
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap">
         <div style="flex:1">
           <div style="font-family:'Orbitron',sans-serif;font-size:12px">${job.name}</div>
-          <div style="font-size:10px;color:var(--text2);margin-top:4px">${job.blueprints?.map(b=>b.name+'×'+b.qty).join(', ')||''} · ${job.createdBy} · ${tsToDate(job.createdAt)}</div>
+          <div style="font-size:10px;color:var(--text2);margin-top:4px">${job.blueprints?.map(b=>b.name+'×'+b.qty).join(', ')||''} · ${job.createdBy} · ${tsToDate(job.createdAt)}${job.sourceReqBy ? ' · <span style=\"color:var(--orange)\">from req by ' + job.sourceReqBy + '</span>' : ''}</div>
         </div>
         <span class="tag" style="background:${sc}22;border:1px solid ${sc}44;color:${sc}">${sl}</span>
         ${canEdit ? `<select onchange="updateJobStatus('${dbPath}','${context}',this.value)" style="font-size:10px;padding:4px 8px;width:auto;background:var(--bg2)">
@@ -5470,14 +5475,19 @@ window.renderOpTimers = function() {
   const el = document.getElementById('op-timers');
   if (!op || !el) return;
   const timers = Object.entries(op.timers || {}).sort((a,b) => (a[1].doneAt||0)-(b[1].doneAt||0));
+  const meIn = !!(op.participants || {})[fbKey(window._session?.username || '')];
   el.innerHTML = timers.length ? timers.map(([tid, t]) => {
     const remain = (t.doneAt || 0) - Date.now();
+    const yieldLine = t.qtyIn
+      ? `<div style="font-size:9px;color:var(--text2);margin-top:2px">${esc(t.matName || 'Material')}: ${t.qtyIn.toLocaleString()} → <span style="color:var(--green)">~${(t.qtyOut ?? t.qtyIn).toLocaleString()}</span> · ${esc(t.method || '')} (−${t.lossPct ?? 0}%)</div>`
+      : (t.method ? `<div style="font-size:9px;color:var(--text2);margin-top:2px">${esc(t.method)}${t.lossPct != null ? ' (est −' + t.lossPct + '%)' : ''}</div>` : '');
     return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
-      <div style="flex:1;font-size:11px">${esc(t.label)}</div>
+      <div style="flex:1;font-size:11px">${esc(t.label)}${yieldLine}</div>
       <div class="${remain <= 0 ? 'timer-done' : 'timer-live'}" style="font-size:12px">${fmtCountdown(remain)}</div>
+      ${remain <= 0 && op.status === 'active' && meIn && t.qtyOut ? `<button class="btn sm green" onclick="logRefineAsHaul('${tid}')" title="Pre-fills a haul entry with the refined output">→ Log Haul</button>` : ''}
       ${(canManageOp(op) || t.createdBy === window._session?.username) && op.status === 'active' ? `<button class="btn sm" onclick="removeOpTimer('${tid}')">✕</button>` : ''}
     </div>`;
-  }).join('') : '<div class="empty" style="padding:10px">No refinery timers.</div>';
+  }).join('') : '<div class="empty" style="padding:10px">No refinery jobs.</div>';
 };
 
 window.renderOpDetail = function() {
@@ -5537,8 +5547,8 @@ window.renderOpDetail = function() {
           ${live && (e.paidBy === me || manage) ? `<button class="btn sm" onclick="removeExpense('${eid}')">✕</button>` : ''}
         </div>`).join('') : '<div class="empty" style="padding:10px">No expenses.</div>'}
         <div style="display:flex;align-items:center;justify-content:space-between;margin:20px 0 8px">
-          <div class="section-title" style="font-size:9px;margin-bottom:0"><div class="dot" style="background:var(--gold)"></div> Refinery Timers</div>
-          ${live && isIn ? `<button class="btn sm gold" onclick="showAddTimerModal()">+ Timer</button>` : ''}
+          <div class="section-title" style="font-size:9px;margin-bottom:0"><div class="dot" style="background:var(--gold)"></div> Refinery Jobs</div>
+          ${live && isIn ? `<button class="btn sm gold" onclick="showAddTimerModal()">+ Refinery Job</button>` : ''}
         </div>
         <div id="op-timers"></div>
       </div>
@@ -5674,21 +5684,87 @@ window.submitExpense = async function() {
   closeModalDirect();
 };
 
+
+// Refinery methods — Speed/Cost/Yield ratings per game data (Alpha 4.8).
+// estLoss is a DEFAULT estimate by yield tier (High ~3%, Moderate ~10%, Low ~18%);
+// the in-game terminal shows the exact yield per work order — users can override.
+const REFINE_METHODS = [
+  { name: 'Dinyx Solventation',     speed: 'Low',      cost: 'High',     yield: 'High',     estLoss: 3 },
+  { name: 'Gaskin Process',         speed: 'Low',      cost: 'Moderate', yield: 'High',     estLoss: 3 },
+  { name: 'Pyrometric Chromalysis', speed: 'Very Low', cost: 'Low',      yield: 'High',     estLoss: 3 },
+  { name: 'Ferron Exchange',        speed: 'Low',      cost: 'Low',      yield: 'Moderate', estLoss: 10 },
+  { name: 'Kazen Winnowing',        speed: 'Moderate', cost: 'Moderate', yield: 'Moderate', estLoss: 10 },
+  { name: 'Thermonatic Deposition', speed: 'High',     cost: 'High',     yield: 'Moderate', estLoss: 10 },
+  { name: 'Cormack Method',         speed: 'High',     cost: 'Moderate', yield: 'Low',      estLoss: 18 },
+  { name: 'Electrostarolysis',      speed: 'Moderate', cost: 'Low',      yield: 'Low',      estLoss: 18 },
+  { name: 'XCR Reaction',           speed: 'High',     cost: 'High',     yield: 'Low',      estLoss: 18 }
+];
+
 window.showAddTimerModal = function() {
-  openModal('REFINERY TIMER', `
-    <div class="field"><label>Label</label><input type="text" id="tm-label" placeholder="e.g. Quant @ MIC-L2 (Dinyx)"></div>
+  openModal('REFINERY JOB', `
+    <div class="field"><label>Label / Location</label><input type="text" id="tm-label" placeholder="e.g. MIC-L1 Shallow Frontier"></div>
+    <div class="grid2">
+      <div class="field"><label>Material (opt.)</label><input type="text" id="tm-mat" placeholder="e.g. Quantainium" oninput="updateRefineCalc()"></div>
+      <div class="field"><label>Input Qty (cSCU / SCU)</label><input type="number" id="tm-in" min="0" step="0.01" oninput="updateRefineCalc()"></div>
+    </div>
+    <div class="field"><label>Refinement Method</label>
+      <select id="tm-method" onchange="refineMethodPick()">
+        ${REFINE_METHODS.map((m,i) => `<option value="${i}">${m.name} — Yield: ${m.yield} · Speed: ${m.speed} · Cost: ${m.cost}</option>`).join('')}
+      </select>
+    </div>
+    <div class="grid2">
+      <div class="field"><label>Est. Material Loss %</label><input type="number" id="tm-loss" min="0" max="99" step="0.1" value="${REFINE_METHODS[0].estLoss}" oninput="updateRefineCalc()"></div>
+      <div class="field"><label>Expected Output</label><div id="tm-out" style="padding:9px 12px;background:var(--bg2);border:1px solid var(--border);font-size:13px;color:var(--green)">—</div></div>
+    </div>
+    <div class="notice info" style="font-size:10px">Loss % is a default estimate by method tier — the refinery terminal shows the exact expected yield when you place the work order, so adjust the % (or just make Output match the terminal) for precise tracking.</div>
     <div class="grid2">
       <div class="field"><label>Hours</label><input type="number" id="tm-h" min="0" value="0"></div>
       <div class="field"><label>Minutes</label><input type="number" id="tm-m" min="0" max="59" value="30"></div>
     </div>
-    <div class="btn-row"><button class="btn gold" style="flex:1" onclick="submitTimer()">Start Timer</button></div>`);
+    <div class="btn-row"><button class="btn gold" style="flex:1" onclick="submitTimer()">Start Refinery Job</button></div>`);
+  updateRefineCalc();
 };
+
+window.refineMethodPick = function() {
+  const m = REFINE_METHODS[parseInt(document.getElementById('tm-method').value)] || REFINE_METHODS[0];
+  document.getElementById('tm-loss').value = m.estLoss;
+  updateRefineCalc();
+};
+
+window.updateRefineCalc = function() {
+  const qtyIn = parseFloat(document.getElementById('tm-in')?.value) || 0;
+  const loss = parseFloat(document.getElementById('tm-loss')?.value) || 0;
+  const out = qtyIn * (1 - loss / 100);
+  const el = document.getElementById('tm-out');
+  if (el) el.textContent = qtyIn > 0 ? (Math.round(out * 100) / 100).toLocaleString() + '  (−' + loss + '%)' : '—';
+};
+
 window.submitTimer = async function() {
   const label = document.getElementById('tm-label').value.trim();
   const ms = ((parseInt(document.getElementById('tm-h').value) || 0) * 60 + (parseInt(document.getElementById('tm-m').value) || 0)) * 60000;
   if (!label || ms <= 0) { alert('Label and a duration required.'); return; }
-  await push(ref(db, `ops_sessions/${window._currentOpId}/timers`), { label, doneAt: Date.now() + ms, createdBy: window._session.username });
+  const m = REFINE_METHODS[parseInt(document.getElementById('tm-method').value)] || REFINE_METHODS[0];
+  const matName = document.getElementById('tm-mat').value.trim();
+  const qtyIn = parseFloat(document.getElementById('tm-in').value) || 0;
+  const lossPct = parseFloat(document.getElementById('tm-loss').value) || 0;
+  const qtyOut = Math.round(qtyIn * (1 - lossPct / 100) * 100) / 100;
+  await push(ref(db, `ops_sessions/${window._currentOpId}/timers`), {
+    label, doneAt: Date.now() + ms, createdBy: window._session.username,
+    method: m.name, matName: matName || null, qtyIn: qtyIn || null, lossPct, qtyOut: qtyIn ? qtyOut : null
+  });
   closeModalDirect();
+};
+
+// Pre-fill the haul modal from a finished refinery job
+window.logRefineAsHaul = function(tid) {
+  const op = (window._opsData || {})[window._currentOpId];
+  const t = op?.timers?.[tid];
+  if (!t) return;
+  showAddHaulModal();
+  setTimeout(() => {
+    if (t.matName) { document.getElementById('haul-mat').value = t.matName; haulMatchCommodity(); }
+    if (t.qtyOut) document.getElementById('haul-qty').value = t.qtyOut;
+  }, 50);
 };
 
 window.pushOpToBank = async function() {
@@ -5883,15 +5959,12 @@ window.renderContracts = function() {
           <div style="font-size:10px;color:var(--text2);margin-top:4px">Posted ${tsToDate(c.postedAt)} by ${esc(c.postedBy)}${c.claimedBy ? ' · claimed by <span style="color:var(--accent)">' + esc(c.claimedBy) + '</span>' : ''}</div>
           ${c.details ? `<div style="font-size:11px;margin-top:8px;line-height:1.5;color:var(--text)">${esc(c.details)}</div>` : ''}
         </div>
-        <div style="text-align:right">
-          <div style="font-size:15px;color:var(--gold)">${fmtAuec(c.reward || 0)}</div>
-          <div style="font-size:9px;color:var(--text2)">${c.payFromTreasury ? 'TO TREASURY BAL.' : 'PAID DIRECT'}</div>
-        </div>
+
       </div>
       <div class="btn-row" style="margin-top:12px;justify-content:flex-end;display:flex;gap:8px">
         ${c.status === 'open' && !mine ? `<button class="btn sm green" onclick="claimContract('${id}')">Claim</button>` : ''}
         ${c.status === 'claimed' && claimedByMe ? `<button class="btn sm" onclick="unclaimContract('${id}')">Abandon</button>` : ''}
-        ${c.status === 'claimed' && canManage ? `<button class="btn sm gold" onclick="completeContract('${id}')">✓ Mark Complete &amp; Pay</button>` : ''}
+        ${c.status === 'claimed' && canManage ? `<button class="btn sm gold" onclick="completeContract('${id}')">✓ Mark Complete</button>` : ''}
         ${['open','claimed'].includes(c.status) && canManage ? `<button class="btn sm" onclick="cancelContract('${id}')">Cancel</button>` : ''}
         ${c.status === 'complete' ? '<span class="tag" style="color:var(--green);border-color:rgba(0,232,152,0.4)">COMPLETED ' + tsToDate(c.completedAt) + '</span>' : ''}
         ${c.status === 'cancelled' ? '<span class="tag">CANCELLED</span>' : ''}
@@ -5904,25 +5977,21 @@ window.showNewContractModal = function() {
   if (!can('post_contract')) return;
   openModal('POST CONTRACT', `
     <div class="field"><label>Title</label><input type="text" id="ct-title" placeholder="e.g. Haul 500 SCU Ship Ammo to Everus"></div>
-    <div class="grid3">
+    <div class="grid2">
       <div class="field"><label>Type</label><select id="ct-type">${Object.entries(CONTRACT_TYPES).map(([k,v]) => `<option value="${k}">${v}</option>`).join('')}</select></div>
       <div class="field"><label>Cert Required</label><select id="ct-cert">${Object.entries(CERT_LEVELS).map(([k,v]) => `<option value="${k}">${v}</option>`).join('')}</select></div>
-      <div class="field"><label>Reward (aUEC)</label><input type="number" id="ct-reward" min="0" value="50000"></div>
     </div>
     <div class="field"><label>Details</label><textarea id="ct-details" style="min-height:70px;resize:none" placeholder="Pickup / dropoff, deadline, requirements..."></textarea></div>
-    <div class="field" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="ct-treasury" checked style="width:auto"><label style="margin:0;cursor:pointer" onclick="document.getElementById('ct-treasury').click()">Credit reward to claimant's Treasury balance on completion</label></div>
     <div class="btn-row"><button class="btn purple-btn" style="flex:1" onclick="submitContract()">Post to Board</button></div>`);
 };
 
 window.submitContract = async function() {
   const title = document.getElementById('ct-title').value.trim();
-  const reward = parseFloat(document.getElementById('ct-reward').value) || 0;
   if (!title) { alert('Title required.'); return; }
   await push(ref(db, 'contracts'), {
     title, type: document.getElementById('ct-type').value,
     certReq: document.getElementById('ct-cert').value,
     details: document.getElementById('ct-details').value.trim(),
-    reward, payFromTreasury: document.getElementById('ct-treasury').checked,
     status: 'open', postedBy: window._session.username, postedAt: Date.now()
   });
   closeModalDirect();
@@ -5945,15 +6014,7 @@ window.cancelContract = async function(id) {
 window.completeContract = async function(id) {
   const c = window._contractsData[id];
   if (!c || c.status !== 'claimed') return;
-  if (!confirm(`Mark complete and pay ${fmtAuec(c.reward || 0)} to ${c.claimedBy}?`)) return;
-  if (c.payFromTreasury && c.reward > 0 && c.claimedBy) {
-    const existing = Object.entries(window._treasuryData || {}).find(([,b]) => b.username === c.claimedBy);
-    if (existing) {
-      await update(ref(db, 'treasury/' + existing[0]), { balance: (existing[1].balance || 0) + c.reward, updatedAt: Date.now(), notes: 'Contract payout: ' + c.title });
-    } else {
-      await push(ref(db, 'treasury'), { username: c.claimedBy, balance: c.reward, updatedAt: Date.now(), notes: 'Contract payout: ' + c.title });
-    }
-  }
+  if (!confirm(`Mark "${c.title}" complete?`)) return;
   await update(ref(db, 'contracts/' + id), { status: 'complete', completedAt: Date.now(), completedBy: window._session.username });
 };
 
@@ -6147,7 +6208,8 @@ setInterval(() => {
       const key = oid + '/' + tid;
       if (t.doneAt && t.doneAt <= Date.now() && t.doneAt > Date.now() - 120000 && !window._notifTimersFired.has(key)) {
         window._notifTimersFired.add(key);
-        firePing('REFINERY DONE', (t.label || 'Refinery job') + ' — ' + op.name + ' is ready for pickup.', 'ops');
+        const yieldInfo = t.qtyOut && t.matName ? ` · ~${t.qtyOut.toLocaleString()} ${t.matName} ready` : '';
+        firePing('REFINERY DONE', (t.label || 'Refinery job') + ' — ' + op.name + yieldInfo + ' · ready for pickup.', 'ops');
       }
     });
   });
@@ -6155,6 +6217,101 @@ setInterval(() => {
 
 // Init bell state once the app shell is visible
 setTimeout(updateNotifBell, 500);
+
+
+/* ═══════════════════════════════════════════
+   REQUISITION → ORG CRAFTING JOB
+   Match requested items against the blueprint DB and
+   queue an org crafting job to fill the req.
+═══════════════════════════════════════════ */
+
+window._reqCraftMatches = null;
+
+function findBlueprintMatches(itemName) {
+  const bps = window._blueprintData?.blueprints || [];
+  const q = (itemName || '').toLowerCase().trim();
+  if (!q) return [];
+  const exact = bps.filter(bp => (bp.productName || '').toLowerCase() === q);
+  if (exact.length) return exact.slice(0, 5);
+  // partial: blueprint name contains item name or vice versa
+  return bps.filter(bp => {
+    const p = (bp.productName || '').toLowerCase();
+    return p.includes(q) || q.includes(p);
+  }).slice(0, 5);
+}
+
+window.showReqToCraftModal = function(reqId) {
+  if (!can('edit_orgbank')) return;
+  const r = (window._reqsData || {})[reqId];
+  if (!r) return;
+  if (!window._blueprintData?.blueprints?.length) {
+    alert('Blueprint data isn\'t loaded yet. Open the Crafting tab (or refresh blueprints there) and try again.');
+    return;
+  }
+  const items = r.items || [];
+  window._reqCraftMatches = items.map((item, idx) => ({
+    itemName: item.name, needed: item.qty || 1,
+    candidates: findBlueprintMatches(item.name)
+  }));
+
+  const rows = window._reqCraftMatches.map((m, idx) => {
+    if (!m.candidates.length) {
+      return `<tr>
+        <td style="font-size:11px">${esc(m.itemName)}</td>
+        <td colspan="2" style="font-size:10px;color:var(--text2)">No blueprint match — will be skipped (source it via bank/purchase instead)</td>
+      </tr>`;
+    }
+    return `<tr>
+      <td style="font-size:11px">${esc(m.itemName)}</td>
+      <td><select id="rc-bp-${idx}" style="font-size:10px;padding:4px 6px;max-width:260px">
+        ${m.candidates.map((bp, ci) => `<option value="${ci}">${esc(bp.productName)}</option>`).join('')}
+        <option value="-1">— Skip this item —</option>
+      </select></td>
+      <td><input type="number" id="rc-qty-${idx}" value="${m.needed}" min="1" style="width:64px;padding:4px 6px;font-size:11px"></td>
+    </tr>`;
+  }).join('');
+
+  const anyMatch = window._reqCraftMatches.some(m => m.candidates.length);
+  openModal('CREATE CRAFTING JOB FROM REQ', `
+    <div class="notice info" style="font-size:10px">Matching "<strong>${esc(r.title)}</strong>" against the blueprint database. Pick the right blueprint per item (or skip), set quantities, and this queues an org crafting job with the full aggregated material list.</div>
+    <table class="tbl" style="width:100%"><thead><tr><th>Requested Item</th><th>Blueprint</th><th>Craft Qty</th></tr></thead><tbody>${rows}</tbody></table>
+    ${anyMatch
+      ? `<div class="btn-row" style="margin-top:16px"><button class="btn orange" style="flex:1" onclick="submitReqCraftJob('${reqId}')">⚒ Queue Org Crafting Job</button></div>`
+      : `<div class="notice warn" style="margin-top:14px">None of the requested items matched a craftable blueprint.</div>`}`);
+};
+
+window.submitReqCraftJob = async function(reqId) {
+  const r = (window._reqsData || {})[reqId];
+  if (!r || !window._reqCraftMatches) return;
+  const queue = [];
+  window._reqCraftMatches.forEach((m, idx) => {
+    if (!m.candidates.length) return;
+    const sel = document.getElementById('rc-bp-' + idx);
+    const ci = parseInt(sel?.value);
+    if (isNaN(ci) || ci < 0) return; // skipped
+    const bp = m.candidates[ci];
+    const qty = Math.max(1, parseInt(document.getElementById('rc-qty-' + idx)?.value) || 1);
+    queue.push({ guid: bp.guid, name: bp.productName, qty, bp });
+  });
+  if (!queue.length) { alert('Nothing selected — pick at least one blueprint or cancel.'); return; }
+
+  const materials = aggregateMaterials(queue);
+  const jobRef = await push(ref(db, 'crafting_jobs'), {
+    name: 'Req: ' + r.title,
+    context: 'org',
+    blueprints: queue.map(i => ({ guid: i.guid, name: i.name, qty: i.qty })),
+    materials,
+    status: 'planning',
+    createdBy: window._session.username,
+    createdAt: Date.now(),
+    sourceReqId: reqId,
+    sourceReqBy: r.submittedBy || null
+  });
+  await update(ref(db, 'requisitions/' + reqId), { craftingJobId: jobRef.key });
+  closeModalDirect();
+  showPage('orgcrafting');
+  if (typeof switchCraftTab === 'function') switchCraftTab('jobs', 'orgcrafting');
+};
 
 // ── Modals ──
 window.closeModal = function(e) { if (e.target === document.getElementById('modalOverlay')) closeModalDirect(); };
