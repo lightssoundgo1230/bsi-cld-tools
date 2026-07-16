@@ -3312,7 +3312,9 @@ window.submitAddToBank = async function() {
   const itemType = isItemType ? 'item' : 'material';
   const source = document.getElementById('atb-source').value.trim() || 'Manual Entry';
   const notes = document.getElementById('atb-notes').value.trim();
-  if (!name || isNaN(qty) || qty < 1) { alert('Fill in all required fields correctly.'); return; }
+  if (!name) { alert('Search and select a material first.'); return; }
+  if (isNaN(qty)) { alert('Quantity is blank or not a number — enter a numeric quantity.'); return; }
+  if (qty <= 0) { alert('Quantity must be greater than 0 (you entered ' + qty + ').'); return; }
   if (!isItemType && (isNaN(qual) || qual < 1 || qual > 999)) { alert('Quality must be between 1 and 999 for materials.'); return; }
   await push(ref(db, 'org_bank'), {
     materialName: name, totalQty: qty, quality: qual, splittable, itemType,
@@ -6312,6 +6314,18 @@ window.submitReqCraftJob = async function(reqId) {
   showPage('orgcrafting');
   if (typeof switchCraftTab === 'function') switchCraftTab('jobs', 'orgcrafting');
 };
+
+
+/* ── Error surfacing: no more silent failures ── */
+window.addEventListener('unhandledrejection', (e) => {
+  const msg = (e.reason && (e.reason.message || e.reason.code)) || String(e.reason || 'Unknown error');
+  if (/permission[_ ]denied/i.test(msg)) {
+    alert('⛔ Firebase blocked this write (PERMISSION_DENIED).\n\nThe database security rules don\'t allow this path yet — the new features (Ops, Fleet, Contracts) need their paths added to the Realtime Database rules.\n\nTechnical detail: ' + msg);
+  } else {
+    alert('⚠ Something went wrong: ' + msg);
+  }
+  console.error('Unhandled rejection:', e.reason);
+});
 
 // ── Modals ──
 window.closeModal = function(e) { if (e.target === document.getElementById('modalOverlay')) closeModalDirect(); };
