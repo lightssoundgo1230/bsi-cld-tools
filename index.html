@@ -1026,7 +1026,7 @@ label { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: 
       <div class="section-title" style="margin-bottom:0;flex:1"><div class="dot" style="background:var(--purple)"></div> Contract Board</div>
       <button class="btn purple-btn" id="btn-new-contract" style="display:none" onclick="showNewContractModal()">+ Post Contract</button>
     </div>
-    <div class="notice info" style="font-size:11px">Org job board: leadership posts hauling, escort, mining, and supply jobs. Claim one, get it done, and it gets marked complete on the board.</div>
+    <div class="notice info" style="font-size:11px">Org job board: leadership posts hauling, escort, mining, and supply jobs. Anyone can claim one — completion is signed off by CLD Leadership or the DoC.</div>
     <div style="display:flex;gap:2px;margin-bottom:20px;border-bottom:1px solid var(--border)">
       <button class="nav-tab active" id="ctab-open" onclick="switchContractTab('open')" style="border-bottom:none">Open</button>
       <button class="nav-tab" id="ctab-claimed" onclick="switchContractTab('claimed')" style="border-bottom:none">In Progress</button>
@@ -5922,7 +5922,18 @@ window.renderBestSell = function() {
 ═══════════════════════════════════════════ */
 
 const CONTRACT_TYPES = { hauling: 'Hauling', escort: 'Escort', mining: 'Mining', salvage: 'Salvage', supply: 'Supply Run', other: 'Other' };
+const CERTS = {
+  'Hauling': ['Haul 1H', 'Haul 1E', 'Haul 2L', 'Haul 2I', 'Haul 2E'],
+  'Salvage': ['Salvage 1S', 'Salvage 1M', 'Salvage 1H', 'Salvage 2C', 'Salvage 2E', 'Salvage 2RS', 'Salvage 3A', 'Salvage 4A'],
+  'Mining':  ['Mining 1H', 'Mining 1S', 'Mining 1R', 'Mining 1G', 'Mining 2M', 'Mining 2E', 'Mining 2P', 'Mining 2RL', 'Mining 2RS', 'Mining 3A', 'Mining 4A']
+};
+// legacy display map for contracts posted before the real cert list existed
 const CERT_LEVELS = { none: 'None', L1: 'Cert L1+', L2: 'Cert L2+', L3: 'Cert L3' };
+function contractCerts(c) {
+  if (Array.isArray(c.certReqs) && c.certReqs.length) return c.certReqs;
+  if (c.certReq && c.certReq !== 'none') return [CERT_LEVELS[c.certReq] || c.certReq];
+  return [];
+}
 
 window.updateContractsBadge = function() {
   const tab = document.getElementById('tab-contracts');
@@ -5956,7 +5967,7 @@ window.renderContracts = function() {
         <div style="flex:1;min-width:220px">
           <div style="font-size:13px">${esc(c.title)}
             <span class="tag" style="margin-left:6px;color:var(--purple);border-color:rgba(160,96,255,0.4)">${CONTRACT_TYPES[c.type] || esc(c.type)}</span>
-            ${c.certReq && c.certReq !== 'none' ? `<span class="tag" style="margin-left:4px;color:var(--orange);border-color:rgba(255,112,32,0.4)">${CERT_LEVELS[c.certReq]}</span>` : ''}
+            ${contractCerts(c).map(cert => `<span class="tag" style="margin-left:4px;color:var(--orange);border-color:rgba(255,112,32,0.4)">${esc(cert)}</span>`).join('')}
           </div>
           <div style="font-size:10px;color:var(--text2);margin-top:4px">Posted ${tsToDate(c.postedAt)} by ${esc(c.postedBy)}${c.claimedBy ? ' · claimed by <span style="color:var(--accent)">' + esc(c.claimedBy) + '</span>' : ''}</div>
           ${c.details ? `<div style="font-size:11px;margin-top:8px;line-height:1.5;color:var(--text)">${esc(c.details)}</div>` : ''}
@@ -5964,9 +5975,10 @@ window.renderContracts = function() {
 
       </div>
       <div class="btn-row" style="margin-top:12px;justify-content:flex-end;display:flex;gap:8px">
-        ${c.status === 'open' && !mine ? `<button class="btn sm green" onclick="claimContract('${id}')">Claim</button>` : ''}
+        ${c.status === 'open' ? `<button class="btn sm green" onclick="claimContract('${id}')">Claim</button>` : ''}
         ${c.status === 'claimed' && claimedByMe ? `<button class="btn sm" onclick="unclaimContract('${id}')">Abandon</button>` : ''}
-        ${c.status === 'claimed' && canManage ? `<button class="btn sm gold" onclick="completeContract('${id}')">✓ Mark Complete</button>` : ''}
+        ${c.status === 'claimed' && can('manage_contract') ? `<button class="btn sm gold" onclick="completeContract('${id}')">✓ Mark Complete</button>` : ''}
+        ${c.status === 'claimed' && !can('manage_contract') && claimedByMe ? `<span class="tag" style="color:var(--gold);border-color:rgba(255,192,64,0.4)">AWAITING CLD/DoC SIGN-OFF</span>` : ''}
         ${['open','claimed'].includes(c.status) && canManage ? `<button class="btn sm" onclick="cancelContract('${id}')">Cancel</button>` : ''}
         ${c.status === 'complete' ? '<span class="tag" style="color:var(--green);border-color:rgba(0,232,152,0.4)">COMPLETED ' + tsToDate(c.completedAt) + '</span>' : ''}
         ${c.status === 'cancelled' ? '<span class="tag">CANCELLED</span>' : ''}
@@ -5979,9 +5991,17 @@ window.showNewContractModal = function() {
   if (!can('post_contract')) return;
   openModal('POST CONTRACT', `
     <div class="field"><label>Title</label><input type="text" id="ct-title" placeholder="e.g. Haul 500 SCU Ship Ammo to Everus"></div>
-    <div class="grid2">
-      <div class="field"><label>Type</label><select id="ct-type">${Object.entries(CONTRACT_TYPES).map(([k,v]) => `<option value="${k}">${v}</option>`).join('')}</select></div>
-      <div class="field"><label>Cert Required</label><select id="ct-cert">${Object.entries(CERT_LEVELS).map(([k,v]) => `<option value="${k}">${v}</option>`).join('')}</select></div>
+    <div class="field"><label>Type</label><select id="ct-type">${Object.entries(CONTRACT_TYPES).map(([k,v]) => `<option value="${k}">${v}</option>`).join('')}</select></div>
+    <div class="field"><label>Required Certifications (optional — select any that apply)</label>
+      <div style="max-height:180px;overflow-y:auto;background:var(--bg2);border:1px solid var(--border);padding:10px 14px">
+        ${Object.entries(CERTS).map(([group, certs]) => `
+          <div style="font-size:9px;letter-spacing:2px;color:var(--text2);text-transform:uppercase;margin:8px 0 4px">${group}</div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:4px 12px">
+            ${certs.map(cert => `<label style="display:flex;align-items:center;gap:6px;margin:0;font-size:11px;cursor:pointer;text-transform:none;letter-spacing:0">
+              <input type="checkbox" class="ct-cert-cb" value="${esc(cert)}" style="width:auto"> ${esc(cert)}
+            </label>`).join('')}
+          </div>`).join('')}
+      </div>
     </div>
     <div class="field"><label>Details</label><textarea id="ct-details" style="min-height:70px;resize:none" placeholder="Pickup / dropoff, deadline, requirements..."></textarea></div>
     <div class="btn-row"><button class="btn purple-btn" style="flex:1" onclick="submitContract()">Post to Board</button></div>`);
@@ -5990,9 +6010,10 @@ window.showNewContractModal = function() {
 window.submitContract = async function() {
   const title = document.getElementById('ct-title').value.trim();
   if (!title) { alert('Title required.'); return; }
+  const certReqs = [...document.querySelectorAll('.ct-cert-cb:checked')].map(cb => cb.value);
   await push(ref(db, 'contracts'), {
     title, type: document.getElementById('ct-type').value,
-    certReq: document.getElementById('ct-cert').value,
+    certReqs,
     details: document.getElementById('ct-details').value.trim(),
     status: 'open', postedBy: window._session.username, postedAt: Date.now()
   });
@@ -6002,7 +6023,8 @@ window.submitContract = async function() {
 window.claimContract = async function(id) {
   const c = window._contractsData[id];
   if (!c || c.status !== 'open') return;
-  if (c.certReq && c.certReq !== 'none' && !confirm(`This contract requires ${CERT_LEVELS[c.certReq]}. Confirm you hold that certification?`)) return;
+  const reqs = contractCerts(c);
+  if (reqs.length && !confirm(`This contract requires: ${reqs.join(', ')}.\n\nConfirm you hold ${reqs.length === 1 ? 'that certification' : 'ALL of those certifications'}?`)) return;
   await update(ref(db, 'contracts/' + id), { status: 'claimed', claimedBy: window._session.username, claimedAt: Date.now() });
 };
 window.unclaimContract = async function(id) {
@@ -6014,6 +6036,7 @@ window.cancelContract = async function(id) {
   await update(ref(db, 'contracts/' + id), { status: 'cancelled', cancelledAt: Date.now(), cancelledBy: window._session.username });
 };
 window.completeContract = async function(id) {
+  if (!can('manage_contract')) { alert('Only CLD Leadership or the Director of Commerce can mark contracts complete.'); return; }
   const c = window._contractsData[id];
   if (!c || c.status !== 'claimed') return;
   if (!confirm(`Mark "${c.title}" complete?`)) return;
